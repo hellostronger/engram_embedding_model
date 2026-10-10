@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 1010" font-family="sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#334155"/>
+    </marker>
+    <marker id="arrR" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#b91c1c"/>
+    </marker>
+    <marker id="arrG" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#15803d"/>
+    </marker>
+    <linearGradient id="mem" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dbeafe"/><stop offset="1" stop-color="#bfdbfe"/>
+    </linearGradient>
+    <linearGradient id="bb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dcfce7"/><stop offset="1" stop-color="#bbf7d0"/>
+    </linearGradient>
+    <linearGradient id="fus" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fef3c7"/><stop offset="1" stop-color="#fde68a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="880" height="1010" fill="#ffffff"/>
+  <text x="440" y="30" text-anchor="middle" font-size="19" font-weight="bold" fill="#0f172a">
+    Engram 条件记忆模块 —— 注入 Transformer 残差流
+  </text>
+  <text x="440" y="52" text-anchor="middle" font-size="12.5" fill="#64748b">
+    DeepSeek《Conditional Memory via Scalable Lookup》arXiv:2601.07372
+  </text>
+
+  <!-- ============== LEFT COLUMN: retrieval path ============== -->
+  <text x="14" y="82" font-size="12" font-weight="bold" fill="#1d4ed8">① 检索：suffix N-gram 哈希寻址</text>
+
+  <rect x="14" y="92" width="390" height="34" rx="5" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="209" y="107" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#0f172a">输入序列 X = (x₁ … x_T)</text>
+  <text x="209" y="121" text-anchor="middle" font-size="10.5" fill="#475569">原始 subword token id</text>
+
+  <line x1="209" y1="126" x2="209" y2="146" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+
+  <rect x="14" y="146" width="390" height="40" rx="5" fill="url(#mem)" stroke="#3b82f6"/>
+  <text x="209" y="163" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1e3a8a">Tokenizer 压缩 P: V → V′</text>
+  <text x="209" y="178" text-anchor="middle" font-size="10" fill="#1e40af">NFKC / NFD / 去音标 / 小写 / 空白折叠</text>
+
+  <line x1="209" y1="186" x2="209" y2="204" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+
+  <rect x="14" y="204" width="390" height="44" rx="5" fill="url(#mem)" stroke="#3b82f6"/>
+  <text x="209" y="221" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1e3a8a">提取 suffix N-gram  g_{t,n}</text>
+  <text x="209" y="238" text-anchor="middle" font-size="10" fill="#1e40af">g₂ = (x′_{t-1}, x′_t)   g₃ = (x′_{t-2}, x′_{t-1}, x′_t)</text>
+
+  <line x1="209" y1="248" x2="209" y2="266" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+
+  <rect x="14" y="266" width="390" height="46" rx="5" fill="url(#mem)" stroke="#3b82f6"/>
+  <text x="209" y="283" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1e3a8a">多头乘法-XOR 哈希  φ_{n,k}</text>
+  <text x="209" y="300" text-anchor="middle" font-size="10" fill="#1e40af">z_{t,n,k} = φ(g) mod M_{n,k}   M 为互异素数</text>
+
+  <line x1="209" y1="312" x2="209" y2="330" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+
+  <!-- table row -->
+  <rect x="14" y="330" width="60" height="46" rx="4" fill="#fef9c3" stroke="#ca8a04"/>
+  <text x="44" y="350" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#713f12">E₂,₁</text>
+  <text x="44" y="364" text-anchor="middle" font-size="9" fill="#854d0e">⌀M</text>
+  <rect x="80" y="330" width="60" height="46" rx="4" fill="#fef9c3" stroke="#ca8a04"/>
+  <text x="110" y="350" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#713f12">E₂,₂</text>
+  <text x="110" y="364" text-anchor="middle" font-size="9" fill="#854d0e">⌀M</text>
+  <rect x="146" y="330" width="60" height="46" rx="4" fill="#fef9c3" stroke="#ca8a04"/>
+  <text x="176" y="350" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#713f12">E₃,₁</text>
+  <text x="176" y="364" text-anchor="middle" font-size="9" fill="#854d0e">⌀M</text>
+  <rect x="212" y="330" width="60" height="46" rx="4" fill="#fef9c3" stroke="#ca8a04"/>
+  <text x="242" y="350" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#713f12">E₃,₂</text>
+  <text x="242" y="364" text-anchor="middle" font-size="9" fill="#854d0e">⌀M</text>
+  <rect x="278" y="330" width="126" height="46" rx="4" fill="#fef9c3" stroke="#ca8a04" stroke-dasharray="4 3"/>
+  <text x="341" y="350" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#713f12">E₂,₁ … E_{N,K}</text>
+  <text x="341" y="366" text-anchor="middle" font-size="9" fill="#854d0e">共 (N−1)·K 张素数表</text>
+
+  <line x1="209" y1="376" x2="209" y2="394" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+
+  <rect x="14" y="394" width="390" height="40" rx="5" fill="url(#mem)" stroke="#3b82f6"/>
+  <text x="209" y="411" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1e3a8a">拼接得记忆向量 e_t ∈ ℝ^d</text>
+  <text x="209" y="427" text-anchor="middle" font-size="10" fill="#1e40af">e_t = ‖ e_{t,2,1} ‖ … ‖ e_{t,N,K}</text>
+
+  <!-- ============== RIGHT COLUMN: backbone ============== -->
+  <text x="480" y="82" font-size="12" font-weight="bold" fill="#15803d">② 动态：backbone 隐状态</text>
+
+  <rect x="480" y="92" width="386" height="40" rx="5" fill="url(#bb)" stroke="#22c55e"/>
+  <text x="673" y="109" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14532d">Transformer 前 l 层</text>
+  <text x="673" y="125" text-anchor="middle" font-size="10" fill="#166534">Attention(全局) + FFN/MoE(组合推理)</text>
+
+  <rect x="480" y="148" width="386" height="50" rx="5" fill="url(#bb)" stroke="#22c55e"/>
+  <text x="673" y="166" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14532d">上下文隐状态 h_t ∈ ℝ^d</text>
+  <text x="673" y="183" text-anchor="middle" font-size="10" fill="#166534">已聚合全局上下文 → 充当 Query</text>
+
+  <text x="480" y="226" font-size="11" font-weight="bold" fill="#334155">Engram 插入层：</text>
+  <rect x="480" y="232" width="186" height="24" rx="4" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="573" y="248" text-anchor="middle" font-size="10.5" fill="#0f172a">Layer 2（早干预最优）</text>
+  <rect x="680" y="232" width="186" height="24" rx="4" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="773" y="248" text-anchor="middle" font-size="10.5" fill="#0f172a">Layer 6 / 15（后期强门控）</text>
+  <text x="673" y="274" text-anchor="middle" font-size="10" fill="#64748b">非每层都注：按建模效果 × 系统延迟权衡</text>
+
+  <!-- ============== FUSION ============== -->
+  <text x="14" y="474" font-size="12" font-weight="bold" fill="#a16207">③ 融合：上下文感知门控</text>
+
+  <line x1="209" y1="434" x2="209" y2="488" stroke="#b91c1c" stroke-width="1.5" marker-end="url(#arrR)"/>
+  <line x1="673" y1="198" x2="673" y2="488" stroke="#15803d" stroke-width="1.5" marker-end="url(#arrG)"/>
+
+  <rect x="14" y="488" width="852" height="96" rx="6" fill="url(#fus)" stroke="#f59e0b" stroke-width="1.6"/>
+
+  <!-- projections -->
+  <rect x="34" y="506" width="176" height="60" rx="5" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="122" y="524" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#78350f">k_t = W_K e_t</text>
+  <text x="122" y="540" text-anchor="middle" font-size="9.5" fill="#92400e">记忆 → Key（静态先验）</text>
+  <text x="122" y="556" text-anchor="middle" font-size="9.5" fill="#92400e">分支专属 W_K⁽ᵐ⁾</text>
+
+  <rect x="243" y="506" width="176" height="60" rx="5" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="331" y="524" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#78350f">v_t = W_V e_t</text>
+  <text x="331" y="540" text-anchor="middle" font-size="9.5" fill="#92400e">记忆 → Value（跨分支共享）</text>
+  <text x="331" y="556" text-anchor="middle" font-size="9.5" fill="#92400e">无 bias：空记忆=零注入</text>
+
+  <rect x="452" y="506" width="200" height="60" rx="5" fill="#ffffff" stroke="#f59e0b" stroke-width="1.8"/>
+  <text x="552" y="524" text-anchor="middle" font-size="11" font-weight="bold" fill="#7c2d12">门控 α_t</text>
+  <text x="552" y="542" text-anchor="middle" font-size="10" fill="#9a3412">σ( RMSNorm(h_t)ᵀ·</text>
+  <text x="552" y="557" text-anchor="middle" font-size="10" fill="#9a3412">RMSNorm(k_t) / √d )</text>
+
+  <rect x="669" y="506" width="176" height="60" rx="5" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="757" y="524" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#78350f">ỹ_t = α_t · v_t</text>
+  <text x="757" y="540" text-anchor="middle" font-size="9.5" fill="#92400e">矛盾则 α→0</text>
+  <text x="757" y="556" text-anchor="middle" font-size="9.5" fill="#92400e">抑制哈希碰撞/多义噪声</text>
+
+  <line x1="243" y1="394" x2="122" y2="506" stroke="#334155" stroke-width="1.2"/>
+  <line x1="243" y1="414" x2="331" y2="506" stroke="#334155" stroke-width="1.2"/>
+  <line x1="673" y1="242" x2="552" y2="506" stroke="#15803d" stroke-width="1.2"/>
+
+  <!-- ============== CONV + RESIDUAL ============== -->
+  <line x1="440" y1="584" x2="440" y2="612" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+
+  <rect x="230" y="612" width="420" height="46" rx="5" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.4"/>
+  <text x="440" y="631" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#312e81">④ 深度因果卷积（拓宽感受野）</text>
+  <text x="440" y="648" text-anchor="middle" font-size="10" fill="#3730a3">Y = SiLU(Conv1D(RMSNorm(ỹ))) + ỹ ，kernel=4, dilation=N, 零初始化</text>
+
+  <line x1="440" y1="658" x2="440" y2="682" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+
+  <rect x="230" y="682" width="420" height="52" rx="6" fill="#0f172a"/>
+  <text x="440" y="704" text-anchor="middle" font-size="13" font-weight="bold" fill="#f8fafc">⑤ 残差融合</text>
+  <text x="440" y="723" text-anchor="middle" font-size="11" fill="#cbd5e1">H_t ← H_t + Y_t ，随后接标准 Attention / MoE</text>
+
+  <line x1="650" y1="734" x2="650" y2="762" stroke="#334155" stroke-width="1.4" marker-end="url(#arr)"/>
+  <text x="666" y="756" font-size="10" fill="#64748b">重复注入第 2 个模块</text>
+
+  <!-- ============== KEY CLAIMS ============== -->
+  <rect x="14" y="790" width="852" height="204" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="30" y="814" font-size="12.5" font-weight="bold" fill="#0f172a">三个关键设计及其代价</text>
+
+  <rect x="30" y="826" width="268" height="156" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="164" y="848" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1d4ed8">① 确定性寻址 → 可预取</text>
+  <text x="164" y="870" text-anchor="middle" font-size="10" fill="#334155">索引只依赖 token id</text>
+  <text x="164" y="888" text-anchor="middle" font-size="10" fill="#334155">与 MoE 的动态路由不同</text>
+  <line x1="46" y1="900" x2="282" y2="900" stroke="#e2e8f0"/>
+  <text x="164" y="918" text-anchor="middle" font-size="10" fill="#15803d" font-weight="bold">CPU 预取 / offload 100B 表</text>
+  <text x="164" y="936" text-anchor="middle" font-size="10" fill="#15803d">吞吐仅 −2.8%（H800）</text>
+  <text x="164" y="958" text-anchor="middle" font-size="9.5" fill="#64748b">存储 × 计算解耦</text>
+  <text x="164" y="972" text-anchor="middle" font-size="9.5" fill="#64748b">突破 HBM 容量限制</text>
+
+  <rect x="306" y="826" width="268" height="156" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="440" y="848" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#b91c1c">② 门控是安全阀</text>
+  <text x="440" y="870" text-anchor="middle" font-size="10" fill="#334155">静态记忆无上下文适配能力</text>
+  <text x="440" y="888" text-anchor="middle" font-size="10" fill="#334155">靠 α 消解多义/碰撞</text>
+  <line x1="322" y1="900" x2="558" y2="900" stroke="#e2e8f0"/>
+  <text x="440" y="918" text-anchor="middle" font-size="10" fill="#334155">实测高激活于</text>
+  <text x="440" y="936" text-anchor="middle" font-size="10" fill="#334155">多 token 实体、成语、术语</text>
+  <text x="440" y="958" text-anchor="middle" font-size="9.5" fill="#64748b">"安然无恙"式模板短语命中</text>
+  <text x="440" y="972" text-anchor="middle" font-size="9.5" fill="#64748b">本节可解释性最强</text>
+
+  <rect x="582" y="826" width="268" height="156" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="716" y="848" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#15803d">③ 解耦 = 算力换容量</text>
+  <text x="716" y="870" text-anchor="middle" font-size="10" fill="#334155">查表成本 ∝ 激活槽位数</text>
+  <text x="716" y="888" text-anchor="middle" font-size="10" fill="#334155">与表总大小无关</text>
+  <line x1="598" y1="900" x2="834" y2="900" stroke="#e2e8f0"/>
+  <text x="716" y="918" text-anchor="middle" font-size="10" fill="#334155">每 token 常数级 O(1)</text>
+  <text x="716" y="936" text-anchor="block" font-size="10" fill="#334155">无需额外 KV cache</text>
+  <text x="716" y="958" text-anchor="middle" font-size="9.5" fill="#64748b">天然不占 attention 预算</text>
+  <text x="716" y="972" text-anchor="middle" font-size="9.5" fill="#64748b">把局部依赖外包给查表</text>
+</svg>

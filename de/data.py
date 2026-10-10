@@ -111,12 +111,34 @@ class DECollator:
             "registry_slots": torch.from_numpy(slots).long(),
         }
 
+    @staticmethod
+    def _field(item, key: str, default=None):
+        """Read a field from either a plain dict or a Triplet dataclass.
+
+        TripletDataset is a transparent container: offline_test.py feeds it Triplet
+        objects while run_abcd.py feeds it dicts parsed straight from jsonl. Both
+        are legitimate, so the collator accepts either instead of forcing one.
+        """
+        if isinstance(item, dict):
+            return item.get(key, default)
+        return getattr(item, key, default)
+
     def __call__(self, batch: Sequence[Triplet]) -> Dict[str, Dict[str, torch.Tensor]]:
-        queries = [b.query for b in batch]
-        pos = [b.positive for b in batch]
+        queries = [self._field(b, "query") for b in batch]
+        pos = [self._field(b, "positive") for b in batch]
+        # _field defaults to None on a missing key; surface that loudly rather than
+        # letting a None reach the tokenizer as an un-debuggable TypeError.
+        for i, (q, p) in enumerate(zip(queries, pos)):
+            if not isinstance(q, str) or not q:
+                raise ValueError(f"batch[{i}] has no usable 'query': {q!r}")
+            if not isinstance(p, str) or not p:
+                raise ValueError(f"batch[{i}] has no usable 'positive': {p!r}")
         negs: List[str] = []
         for b in batch:
-            negs.extend(b.negatives)
+            n = self._field(b, "negatives", []) or []
+            if isinstance(n, str):
+                n = [n]
+            negs.extend(n)
 
         out = {
             "query": self._encode(queries),

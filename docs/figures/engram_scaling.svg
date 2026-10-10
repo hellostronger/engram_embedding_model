@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 620" font-family="sans-serif">
+  <defs>
+    <marker id="a3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="880" height="620" fill="#ffffff"/>
+
+  <!-- ================= TITLE ================= -->
+  <text x="440" y="28" text-anchor="middle" font-size="19" font-weight="bold" fill="#0f172a">
+    稀疏性分配：U 形定标律 与 无限记忆区
+  </text>
+  <text x="440" y="50" text-anchor="middle" font-size="12.5" fill="#64748b">
+    固定总参数 P_tot 与激活参数 P_act，如何在「MoE 专家」与「Engram 记忆」之间切分？
+  </text>
+
+  <!-- ================= LEFT GRAPH: U curve ================= -->
+  <rect x="16" y="66" width="424" height="300" rx="7" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="228" y="90" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f172a">分配比 ρ 与验证损失（U 形）</text>
+
+  <!-- axes -->
+  <line x1="60" y1="120" x2="60" y2="330" stroke="#334155" stroke-width="1.6" marker-end="url(#a3)"/>
+  <line x1="60" y1="330" x2="404" y2="330" stroke="#334155" stroke-width="1.6" marker-end="url(#a3)"/>
+  <text x="24" y="228" font-size="11" fill="#334155" transform="rotate(-90 24 228)">验证损失</text>
+  <text x="232" y="352" text-anchor="middle" font-size="11" fill="#334155">ρ = MoE 专家分得的稀疏参数占比</text>
+
+  <!-- gridlines -->
+  <line x1="60" y1="180" x2="404" y2="180" stroke="#e2e8f0" stroke-dasharray="3 3"/>
+  <line x1="60" y1="230" x2="404" y2="230" stroke="#e2e8f0" stroke-dasharray="3 3"/>
+  <line x1="60" y1="280" x2="404" y2="280" stroke="#e2e8f0" stroke-dasharray="3 3"/>
+
+  <!-- rho axis labels -->
+  <text x="60" y="346" text-anchor="middle" font-size="10" fill="#64748b">0%</text>
+  <text x="146" y="346" text-anchor="middle" font-size="10" fill="#64748b">25%</text>
+  <text x="232" y="346" text-anchor="middle" font-size="10" fill="#64748b">50%</text>
+  <text x="318" y="346" text-anchor="middle" font-size="10" fill="#64748b">75%</text>
+  <text x="404" y="346" text-anchor="middle" font-size="10" fill="#64748b">100%</text>
+
+  <!-- pure MoE baseline (rho=100) -->
+  <line x1="404" y1="160" x2="404" y2="330" stroke="#b91c1c" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <circle cx="404" cy="176" r="5" fill="#b91c1c"/>
+  <text x="404" y="152" text-anchor="end" font-size="10" font-weight="bold" fill="#b91c1c">纯 MoE ρ=100%</text>
+  <text x="404" y="166" text-anchor="end" font-size="9" fill="#b91c1c">1.7248</text>
+
+  <!-- U curve: two curves C=2e20 (higher loss) and C=6e20 (lower) -->
+  <path d="M60,196 C110,150 170,132 232,126 C290,121 340,128 404,176"
+        fill="none" stroke="#1d4ed8" stroke-width="2.6"/>
+  <path d="M60,238 C110,196 170,180 232,174 C290,169 340,176 404,220"
+        fill="none" stroke="#93c5fd" stroke-width="2.2" stroke-dasharray="6 3"/>
+
+  <!-- optimum -->
+  <circle cx="290" cy="125" r="6" fill="#15803d" stroke="#ffffff" stroke-width="2"/>
+  <line x1="290" y1="125" x2="290" y2="330" stroke="#15803d" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="286" y="318" text-anchor="end" font-size="10" font-weight="bold" fill="#15803d">最优 ρ ≈ 75–80%</text>
+  <text x="286" y="332" text-anchor="end" font-size="9" fill="#15803d">1.7109</text>
+
+  <!-- annotations -->
+  <text x="86" y="222" font-size="9.5" fill="#b91c1c">← Engram 主导</text>
+  <text x="78" y="236" font-size="9" fill="#b91c1c">失去条件计算</text>
+  <text x="352" y="212" font-size="9.5" fill="#1d4ed8" text-anchor="end">MoE 主导 ↑</text>
+  <text x="352" y="226" font-size="9" fill="#1d4ed8" text-anchor="end">静态模式无家可归</text>
+
+  <!-- legend -->
+  <line x1="66" y1="270" x2="92" y2="270" stroke="#1d4ed8" stroke-width="2.6"/>
+  <text x="98" y="274" font-size="9.5" fill="#334155">C=6×10²⁰（P_tot≈9.9B）</text>
+  <line x1="240" y1="270" x2="266" y2="270" stroke="#93c5fd" stroke-width="2.2" stroke-dasharray="6 3"/>
+  <text x="272" y="274" font-size="9.5" fill="#334155">C=2×10²⁰</text>
+
+  <text x="228" y="384" text-anchor="middle" font-size="10.5" fill="#475569">
+    纯 MoE 是次优点：把 20–25% 稀疏参数让给记忆反而更好
+  </text>
+
+  <!-- ================= RIGHT GRAPH: infinite memory ================= -->
+  <rect x="452" y="66" width="412" height="300" rx="7" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="658" y="90" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f172a">无限记忆区：记忆槽位的对数线性收益</text>
+
+  <line x1="496" y1="120" x2="496" y2="330" stroke="#334155" stroke-width="1.6" marker-end="url(#a3)"/>
+  <line x1="496" y1="330" x2="852" y2="330" stroke="#334155" stroke-width="1.6" marker-end="url(#a3)"/>
+  <text x="460" y="228" font-size="11" fill="#334155" transform="rotate(-90 460 228)">验证损失</text>
+  <text x="674" y="352" text-anchor="middle" font-size="11" fill="#334155">记忆槽位数 M（对数轴）</text>
+
+  <line x1="496" y1="180" x2="852" y2="180" stroke="#e2e8f0" stroke-dasharray="3 3"/>
+  <line x1="496" y1="230" x2="852" y2="230" stroke="#e2e8f0" stroke-dasharray="3 3"/>
+  <line x1="496" y1="280" x2="852" y2="280" stroke="#e2e8f0" stroke-dasharray="3 3"/>
+
+  <text x="500" y="346" font-size="10" fill="#64748b">2.6e5</text>
+  <text x="590" y="346" font-size="10" fill="#64748b">1e6</text>
+  <text x="700" y="346" font-size="10" fill="#64748b">4e6</text>
+  <text x="810" y="346" font-size="10" fill="#64748b">1e7</text>
+
+  <!-- log-linear curve -->
+  <path d="M496,282 C570,240 660,196 762,166 C800,154 830,148 852,143"
+        fill="none" stroke="#a16207" stroke-width="2.8"/>
+  <circle cx="496" cy="282" r="4" fill="#a16207"/>
+  <circle cx="852" cy="143" r="5" fill="#a16207" stroke="#ffffff" stroke-width="2"/>
+
+  <text x="700" y="136" font-size="10" font-weight="bold" fill="#a16207">+13B 参数</text>
+  <text x="700" y="150" text-anchor="middle" font-size="9.5" fill="#a16207">严格的幂律</text>
+
+  <text x="674" y="386" text-anchor="middle" font-size="10.5" fill="#475569">
+    加到 ≈13B 仍未饱和：记忆容量换来的是「免费」参数
+  </text>
+
+  <!-- ================= BOTTOM ================= -->
+  <rect x="16" y="404" width="848" height="198" rx="7" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="440" y="428" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f172a">
+    为什么这两条曲线对我们做垂域 Embedding 至关重要
+  </text>
+
+  <rect x="34" y="442" width="268" height="150" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="168" y="464" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1d4ed8">① 存在最优切分点</text>
+  <text x="168" y="486" text-anchor="middle" font-size="10" fill="#334155">不存在「记忆越多越好」</text>
+  <text x="168" y="504" text-anchor="middle" font-size="10" fill="#334155">ρ≈0 时丢掉组合推理能力</text>
+  <line x1="50" y1="516" x2="286" y2="516" stroke="#e2e8f0"/>
+  <text x="168" y="536" text-anchor="middle" font-size="10" fill="#15803d">对 Embedding 的含义</text>
+  <text x="168" y="554" text-anchor="middle" font-size="9.5" fill="#64748b">记忆表不能无限挤占容量</text>
+  <text x="168" y="570" text-anchor="middle" font-size="9.5" fill="#64748b">应留足 backbone 表征能力</text>
+  <text x="168" y="584" text-anchor="middle" font-size="9.5" fill="#b91c1c">我们未见 Embedding 域有对应定律</text>
+
+  <rect x="306" y="442" width="268" height="150" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="440" y="464" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#a16207">② 记忆容量是"免费"杠杆</text>
+  <text x="440" y="486" text-anchor="middle" font-size="10" fill="#334155">每 token 激活槽位数恒定</text>
+  <text x="440" y="504" text-anchor="middle" font-size="10" fill="#334155">加表不加 FLOPs</text>
+  <line x1="322" y1="516" x2="558" y2="516" stroke="#e2e8f0"/>
+  <text x="440" y="536" text-anchor="middle" font-size="10" fill="#15803d">对 Embedding 的含义</text>
+  <text x="440" y="554" text-anchor="middle" font-size="9.5" fill="#64748b">长尾术语容量只吃内存</text>
+  <text x="440" y="570" text-anchor="middle" font-size="9.5" fill="#64748b">不会拖慢编码吞吐</text>
+  <text x="440" y="584" text-anchor="middle" font-size="9.5" fill="#b91c1c">但 Adam 更新会遍历全表</text>
+
+  <rect x="582" y="442" width="268" height="150" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="716" y="464" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#15803d">③ 现代版 N-gram 有效</text>
+  <text x="716" y="486" text-anchor="middle" font-size="10" fill="#334155">朴素 N-gram 早已过时</text>
+  <text x="716" y="504" text-anchor="middle" font-size="10" fill="#334155">但加上压缩+多头哈希+门控</text>
+  <line x1="598" y1="516" x2="834" y2="516" stroke="#e2e8f0"/>
+  <text x="716" y="536" text-anchor="middle" font-size="10" fill="#15803d">四个现代改造缺一不可</text>
+  <text x="716" y="554" text-anchor="middle" font-size="9.5" fill="#64748b">Tokenizer 压缩 / 多头哈希</text>
+  <text x="716" y="570" text-anchor="middle" font-size="9.5" fill="#64748b">上下文门控 / 多分支集成</text>
+  <text x="716" y="584" text-anchor="middle" font-size="9.5" fill="#b91c1c">去掉任一都明显掉点</text>
+</svg>

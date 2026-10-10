@@ -106,14 +106,16 @@ def build(out_dir: str, domain: str, n: int, seed: int = 0):
             q = rng.choice(cfg["templates_q"]).format(t=t)
             gold = rng.choice(cfg["templates_p"]).format(t=t)
             queries.append(q)
-            pos_idx.append(len(corpus))
-            corpus.append(gold)
-            # 5 distractors sharing the domain filler but not the term
+            # build the row's corpus: gold + 5 distractors, then shuffle and record
+            # the gold's LOCAL index within this row (eval_rows expects local idx)
+            docs = [gold]
             for _ in range(5):
                 t2 = rng.choice([x for x in terms if x != t])
-                corpus.append(rng.choice(cfg["templates_p"]).format(t=t2))
-        for q, docs, pi in zip(queries, _group(corpus, 6), pos_idx):
-            f.write(json.dumps({"query": q, "corpus": docs, "gold": pi},
+                docs.append(rng.choice(cfg["templates_p"]).format(t=t2))
+            rng.shuffle(docs)
+            corpus.append((q, docs, docs.index(gold)))
+        for q, docs, gi in corpus:
+            f.write(json.dumps({"query": q, "corpus": docs, "gold": gi},
                                ensure_ascii=False) + "\n")
 
     # ---- cold-start: held-out terms with support contexts ------------------ #
