@@ -1,8 +1,24 @@
 # TODO — Domain Engram
 
-> 更新于 2026-10-11。**本轮推翻了大量历史结论**，旧数字已作废，勿再引用。
+> 创建于 2026-10-11。**本轮推翻了大量历史结论**，旧数字已作废，勿再引用。
+>
+> 📌 **2026-10-11 收尾：已全部推送至 `origin/main`（commit `0db5d7a`），工作树干净。**
+> 下一步在 NVIDIA 卡上执行，顺序见 **[GB10_RUNBOOK.md](GB10_RUNBOOK.md)**。
+> 所有实验数字以 **[EXPERIMENTS.md](EXPERIMENTS.md)** 为唯一权威出处。
 >
 > 图例：`[ ]` 未开始 · `[~]` 进行中 · `[x]` 完成 · `[!]` 被环境阻塞 · `[✗]` 已作废
+
+---
+
+## 🔴 下一步（GPU 上执行，按序）
+
+1. `python offline_test.py` → 必须 **9/9**（验证 CUDA/SDPA 分支，本项目唯一未在 GPU 跑过的路径）
+2. `python download_data.py --tier p0` → 复现数据（0.65 GB，约 2 分钟）
+3. **`python run_cold_start.py --data data/real/eval/law --epochs 10 --lr 1e-3 --device cuda`**
+   → **E-009，冷启动有效性。这是第一次能真正证伪 P0 的运行。**
+   判据：`D − C (unseen nDCG) ≥ +2`，且 `match rate ≈ 100%`、`cos(ON,OFF) ≈ 0.85~0.95`
+4. 结果写入 `docs/EXPERIMENTS.md` 编号 E-009（含环境/配置/原始输出/判定）
+5. 之后才做消融 E-010~E-015（见 EXPERIMENTS.md 附录）
 
 ---
 
