@@ -65,10 +65,12 @@ class DECollator:
     """
 
     def __init__(self, tokenizer, matcher, max_len: int = 128,
-                 add_special_tokens: bool = True, lookup_table=None):
+                 add_special_tokens: bool = True, lookup_table=None,
+                 query_max_len: Optional[int] = None):
         self.tok = tokenizer
         self.matcher = matcher
         self.max_len = max_len
+        self.query_max_len = query_max_len or max_len
         self.add_special_tokens = add_special_tokens
         if lookup_table is None:
             raise ValueError(
@@ -78,12 +80,13 @@ class DECollator:
             )
         self.lookup_table = lookup_table
 
-    def _encode(self, texts: List[str]) -> Dict[str, torch.Tensor]:
+    def _encode(self, texts: List[str], max_len: Optional[int] = None) -> Dict[str, torch.Tensor]:
+        ml = max_len or self.max_len
         enc = self.tok(
             texts,
             padding=True,
             truncation=True,
-            max_length=self.max_len,
+            max_length=ml,
             add_special_tokens=self.add_special_tokens,
             return_tensors=None,
         )
@@ -141,7 +144,7 @@ class DECollator:
             negs.extend(n)
 
         out = {
-            "query": self._encode(queries),
+            "query": self._encode(queries, self.query_max_len),
             "positive": self._encode(pos),
         }
         if negs:

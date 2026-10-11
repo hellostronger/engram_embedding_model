@@ -1,820 +1,734 @@
-# EXPERIMENTS.md — Domain Engram: Comparison & Ablation Experiment Matrix
+# EXPERIMENTS.md — 实验记录（唯一权威出处）
 
-> Companion to `docs/PLAN.md`. PLAN.md says *what* to build; this document says **how we will try to
-> prove it is wrong**. Every experiment below is specified so that it can *falsify* the Domain Engram
-> (DE) hypothesis. Nothing here is a "confirmatory" test by construction.
+> 记录所有实验的**环境 / 配置 / 原始输出 / 结论 / 判定**。
+> 任何数字以本文档为准；其他文档（README / TODO / PLAN）引用时须指向此处。
 >
-> Author: experiment-design subagent · Date: 2026-10-10 · Plan revision target: PLAN.md §5
->
-> **Sandbox note:** the development sandbox has no GPU and blocks HuggingFace downloads, so *nothing
-> in this document was executed*. All numbers marked `[REF]` are copied from published sources and
-> were verified by web search; all timings are `[EST]` engineering estimates that **must be replaced
-> by the M0 calibration measurement** (§7 Phase 0) before they are quoted.
->
-> Items I could not verify are explicitly tagged `UNVERIFIED`. No identifier in this document is
-> invented; where an id could not be confirmed it is left out rather than guessed.
+> 创建于 2026-10-11。环境变更或结论推翻时**追加新条目，不删旧条目**，
+> 旧条目标 `[已作废]` 并注明作废原因——作废的实验和它的结论同样重要。
 
 ---
 
-## 0. TL;DR — the thesis, and how we will kill it
+## 记录规范
 
-**Thesis.** A frozen bi-encoder plus a *writable* Engram-style memory (hashed N-gram tables + a CRUD
-term registry) can be domain-adapted for retrieval at (a) lower trainable-parameter cost than LoRA at
-matched budget, and (b) **zero retraining cost** when the domain vocabulary changes after deployment.
+每条实验必须有唯一 ID（`E-###`），包含：
+- **环境**：硬件 / torch / backbone
+- **配置**：完整超参
+- **数据**：来源 + 行数 + 关键统计
+- **原始输出**：未经修饰的数字
+- **结论**：这个实验**能**说明什么
+- **判定**：✅ 有效 / ⚠️ 有保留 / `[已作废]` 及原因
 
-Three claims, three falsifiers:
-
-| # | Claim | Falsifier |
-|---|-------|-----------|
-| **C1** | Memory improves domain retrieval over the frozen backbone | `A` ≈ `C` on DomainTier nDCG@10 |
-| **C2** | The memory — not just extra capacity — is the mechanism | a matched-capacity **LoRA** or **CPT** on the same data reaches ≥ `C` |
-| **C3** | The **writable registry** lets you fix new terms after deployment | post-hoc writes (`D`) do not beat `C` on terms unseen in training |
-
-If **C2** fails, the honest paper is "a cheap-to-update but not better" method, and only C3 can
-rescue it. If **C3** fails, DE collapses into plain Engram-for-embeddings and the CRUD registry —
-the paper's *only* claimed novelty over the Engram paper — is dead. We pre-commit to reporting that
-outcome as a negative result (§6).
+**禁止**：在未记录实验的情况下修改结论。
 
 ---
 
-## 1. Reference configuration `DE-Ref`
+# 第一部分：作废实验（E-001 ~ E-003）
 
-Everything is stated relative to one frozen reference. No experiment deviates from this without a
-logged reason.
+> 这三个实验跑在**随机初始化的 tiny backbone** 上。TODO.md 早期版本
+> （以及本文件创建前的对话）曾引用它们的数字，**全部已作废**。
 
-### 1.1 Backbone (tier S — the fast iteration model)
+## E-001 `[已作废]` A/B/C/D on synthetic + tiny backbone
 
-| Property | Value | Source |
+**环境**
+- CPU: AMD Ryzen 7 5700X / 8核16线程 @3.4GHz / 31.9 GB RAM
+- `torch 2.10.0+cpu`，8 线程，`CUDA avail = False`
+- backbone: `build_tiny_backbone()` — **随机初始化** BertModel(vocab=144, hidden=**64**, layers=4, heads=4, ffn=256)，**1,564,736 参数，未训练**
+- 数据: `make_synthetic_data.py --domain medical --n 2000`（合成）
+
+**配置**
+- `layer_ids=[1,3]`, `table_size_per_ngram=1024`, `d_head=8`, `d_registry=8`, `n_head_per_ngram=2`, `max_registry_slots=2048`
+- 可训练参数 **221,794**
+- epochs=2, bs=32, lr=1e-3, max_len=64
+
+**原始输出**
+```
+A baseline / seen       R@1=100.0  nDCG=100.0
+A baseline / unseen     R@1= 79.5  nDCG= 91.8
+B random memory / seen  R@1=100.0  nDCG=100.0
+C trained / seen        R@1=100.0  nDCG=100.0
+C trained / unseen      R@1= 81.0  nDCG= 92.4
+D cold-start / unseen   R@1= 79.0  nDCG= 91.5
+D cold-start / seen     R@1=100.0  nDCG=100.0
+
+C - A (seen nDCG):  +0.00
+D - C (unseen nDCG): -0.87
+训练 loss: epoch0 1.3580 -> epoch1 1.3181
+```
+
+**结论**：无法说明任何问题。
+
+**判定 `[已作废]`**，三条原因：
+1. **backbone 是随机权重**。随机网络无语义结构，记忆是刚需 → 早期版本据此声称的 `C−A=+14.30` 纯粹是"小模型太弱"的假象
+2. **合成 seen 任务饱和**。A/B/C 的 R@1 与 nDCG **全部=100.0**，记忆机制无提升空间，恒等于 0 差异
+3. **合成数据自证**。query 与正例共享同一术语、干扰项仅差术语名；held-out 术语 `新发疾病N` 间仅编号不同，backbone 纯词形匹配即得 79.5 R@1，**根本用不上记忆**
+4. **训练不足**。loss 仅从 1.3580 降至 1.3181（−0.04），2 轮不构成训练
+
+**被本实验误导的历史结论**（均已作废）：
+| 结论 | 出处 | 作废原因 |
 |---|---|---|
-| Model id | `BAAI/bge-small-zh-v1.5` | `[REF]` model card |
-| Params | 24 M total; ≈12.58 M non-embedding | `[REF]` card + arithmetic |
-| Layers | **4** | `[REF]` model config |
-| Hidden / heads / FFN | 512 / 8 / 2048 | `[REF]` model config |
-| Vocab | 21 128 · max seq 512 · emb dim 512 | `[REF]` model config |
-| Pooling | CLS + L2 norm (BGE convention) | `[REF]` BGE docs |
+| `C−A = +14.30`（记忆训练有效） | TODO 旧版 | tiny backbone 太弱；真 backbone 上饱和为 +0.00 |
+| `D−C = +0.06`（冷启动无效） | TODO 旧版 | 平台无效，数字无意义 |
+| "冷启动增益仅 +0.06" | TODO 旧版 | 同上 |
 
-> **Correction to PLAN.md.** PLAN.md §4 states "BGE-small-zh-v1.5 / bge-base-zh-v1.5（中文，384/768 维）"
-> and "BGE-small-zh（33M 级）". Both are wrong: `bge-small-zh-v1.5` is **512-dim, 24 M params, 4
-> layers** (33 M / 384-dim is `bge-small-en-v1.5`, an English model). This matters a great deal — a
-> 4-layer encoder is far more hostile to "inject at layer 2 and let 10 layers refine" (§4.4).
+---
 
-**Published C-MTEB anchors for group A** (`[REF]`, FlagEmbedding / C-MTEB 1.1.1 leaderboard,
-100k sampled candidates per query):
+## E-002 `[已作废]` 冷启动诊断 on tiny backbone（cos = −0.044）
 
-| Metric | `bge-small-zh-v1.5` | `bge-base-zh-v1.5` | `bge-large-zh-v1.5` |
+**环境/配置**：同 E-001（tiny 随机 backbone, hidden=64）
+
+**原始输出**
+```
+[H1] matcher fires on eval_cold BEFORE write: 0/200 (0.0%)
+[H1] matcher fires on eval_cold AFTER  write: 200/200 (100.0%)
+[H2] gate alpha at MATCHED positions (n=200): mean=0.2520 min=0.0014 max=0.8921 -> OPEN
+[H3] 22/23 engram/registry params received gradient during C
+     registry_table.emb.weight: STILL-AT-INIT
+[DELTA] ||emb(ON)-emb(OFF)|| mean=1.44493 max=1.46073
+[ORIENT] cos(emb_ON, emb_OFF): mean=-0.0440 min=-0.0669
+```
+
+**曾经的结论**：写入过度（memory 覆写了 backbone 表示而非微调）→ 提出 "H4 写入过度" 假设。
+
+**判定 `[已作废]`**：同一随机 backbone 在 E-004 上给出 `cos=+0.894`。随机权重无稳定表示空间，"近正交"是随机基线效应。**H4 假设被 E-004 直接推翻。**
+
+**本实验的有效部分**：H1 / H2 / H3 的排除结论在 E-004 上被独立复现，故这些结论**不是**作废的，而是被 E-004 以有效平台重新确立。
+
+---
+
+# 第二部分：有效实验（E-003 ~）
+
+## E-003 环境与数据可用性实测
+
+**目的**：确认网络 / 依赖 / 数据能否获取。**无模型参与。**
+
+### E-003a 依赖修复 `[✅ 有效]`
+
+**问题**：`scipy 1.12.0`（NumPy 1.x ABI）+ `numpy 2.4.2` → `transformers` 导入链经 `sklearn → scipy.sparse` 崩溃：
+```
+ImportError: numpy.core.multiarray failed to import
+```
+**修复**：`pip install --upgrade "scipy>=1.13"` → `scipy 1.18.1`
+**副作用**：`gensim 4.3.3` / `graspologic 3.4.1` 与新版 NumPy/SciPy 不兼容（项目当前不使用这两个库）
+
+### E-003b 网络连通性 `[✅ 有效]`
+
+**背景**：TODO 记录「HF 下载被沙箱代理拦截」。**该记录已过时。**
+
+| 端点 | 裸 urllib | 结论 |
+|---|---|---|
+| `huggingface.co` | 超时 (WinError 10060) | 直连不通 |
+| `hf-mirror.com` | 根域 200，API 403 | 需官方客户端 |
+| `github.com` / `raw.githubusercontent.com` | 超时 / 强制关闭 | 不通 |
+| `modelscope.cn` / `gitee.com` / `pypi.tuna` | 200 | 通 |
+
+**关键突破**：本机有出网代理，设置 `HTTP_PROXY` / `HTTPS_PROXY` 后即可访问
+（**代理地址为本机环境细节，不写入仓库；换机器请自行设置或使用直连**）
+→ huggingface.co API 正常，实测 5.0 MB/s
+验证数据集：`coastalcph/lex_glue` 40.5 MB / 81.5s（无代理时）；`qiaojin/PubMedQA` 233.4 MB / 46.3s（**5.0 MB/s**，有代理）
+
+### E-003c 硬件实测 `[✅ 有效]`
+
+| 项 | TODO 历史记录 | **实测** | 差异 |
 |---|---|---|---|
-| Avg | 57.82 | 63.13 | 64.53 |
-| **Retrieval** | **61.77** | **69.49** | **70.46** |
-| STS | 49.11 | 53.72 | 56.25 |
-| Classification | 63.96 | 68.07 | 69.13 |
-| Clustering | 44.18 | 47.53 | 48.99 |
-| Embedding dim | 512 | 768 | 1024 |
+| CPU | i7-8550U | **AMD Ryzen 7 5700X** | TODO 记录错误 |
+| 核心 | — | 8核16线程 @ 3.4GHz | |
+| RAM | 24 GB | **31.9 GB** | |
+| GPU | 无 | 无（`torch 2.10.0+cpu`，8 threads） | 一致 |
+| 磁盘 | — | D: 67.5 GB free | |
 
-`A` must land within **±0.5 nDCG@10** of 61.77 on C-MTEB Retrieval or the whole harness is invalid (§7
-Phase 0). Per-task C-MTEB numbers for the `-v1.5` checkpoints are **not published** (`UNVERIFIED`);
-only `bge-small-zh` (v1) per-task values exist (Ecom 58.17 / Medical 49.90 / Cmedqa 35.18 /
-Covid 68.95 / Video 69.33, retrieval avg 63.07) — use these as an order-of-magnitude sanity band only.
+### E-003d 真实 backbone 规格 `[✅ 有效]`
 
-### 1.2 Tier-B backbone (scale-up, run only if Phase 4 passes)
+`BAAI/bge-small-zh-v1.5` config.json 实测：
+```
+model_type=bert  hidden_size=512  num_hidden_layers=4
+num_attention_heads=8  intermediate_size=2048
+vocab_size=21128  max_position_embeddings=512
+```
+**推论**：`layer_ids=[1,3]` 把第二个注入点放在**第 4 层（最后一层）**，注入后直接进 pooling，零精炼 → 违反 Engram 消融结论（层 2 最优，注入后需留 block）。应改 `[1,2]`。
 
-`BAAI/bge-base-zh-v1.5` — 12 layers, hidden 768, 768-dim embeddings, C-MTEB Avg 63.13 /
-Retrieval 69.49 `[REF]`. 12 layers is the configuration in which Engram's "layer 2 is optimal"
-finding was measured, so the layer sweep must be repeated here before any layer claim is published
-(§3.4).
+### E-003e 参数规模实测 `[✅ 有效]`
 
-### 1.3 DE reference hyperparameters `DE-Ref-S`
+**注意：`run_abcd.py` 使用缩小的实验配置，不是 `de/config.py` 的生产默认值。**
 
-| Knob | Value | Rationale |
+| | 生产默认 (config.py) | **实验实际 (run_abcd)** |
 |---|---|---|
-| `layer_ids` | `[1]` (0-indexed) | 4-layer model; ≈ layer 2 of 4 |
-| `max_ngram_size` | 3 (orders {2,3}) | Engram reference config uses {2,3} `[REF]` Sec 6.2 |
-| `n_head_per_ngram` | 8 | Engram reference config uses K=8 `[REF]` Sec 4.1 |
-| `table_size_per_ngram` | 16 384 (distinct primes ≥) | chosen to hit budget S (§1.4) |
-| `d_head` | 16 | ditto |
-| Registry slots / dim | 50 000 × 32 | ditto |
-| `max_matches_per_pos` | 4 | matches current `EngramConfig` |
-| `conv_kernel_size` / dilation | 4 / 3 | Engram Eq. 5 `[REF]` |
-| `gate_bias_init` | −2.0 | current code; keeps α ≈ 0.12 at init |
-| `pooling` | CLS | BGE convention — **ablated**, see OAT-12 |
-| InfoNCE temp | 0.02 | current code; BGE-family standard |
-| fusion opt | AdamW, lr 2e-5, wd 0.01, 10 % linear warmup → cosine | |
-| memory opt | Adam, lr ×5, **wd 0** | Engram Sec 4.1 `[REF]` |
-| conv init | zeros (identity at step 0) | Engram Sec 4.1 `[REF]` |
-| train `max_len` / eval `max_len` | 128 / 512 | held constant across *all* arms (§5.4) |
+| hashed N-gram 表 | 67.16 M | 12.6 M |
+| fusion | 1.58 M | 0.20 M |
+| registry 表 | 12.80 M | 0.016 M |
+| **可训练合计** | **81.54 M** | **0.22 M** |
+| backbone | 23.9 M（冻结） | 23.9 M（冻结） |
+| **总计** | **105.4 M** | **24.1 M** |
 
-### 1.4 Parameter budget arithmetic (the iso-parameter anchor)
+**生产配置的部署成本**（用户关心的快速推理）：
+- 每 token MACs：backbone 12.6 M，Engram 1.58 M → **算力仅 +12.5%**
+- 但权重：backbone 96 MB(fp32)，Engram 表 **268 MB(fp32)** → **2.8×**
+- **参数:算力比 42:1 → 纯访存瓶颈，非计算瓶颈**
+- 这 67 M 槽在 21128 中文词表下**绝大多数永远为空**（3-gram 表废槽最多）
+- 降本候选：`table_size_per_ngram` 65536→16384、`n_head_per_ngram` 8→4、表存 bf16（**需先做检索质量消融**）
+
+**结论**：模型是 **0.1 B 级**，不是 B 级。可训练部分 82% 是查表。
+
+### E-003f 真实数据获取 `[✅ 有效]`
+
+**subagent 下载，独立复核通过。**
+
+| 数据集 | 路径 | MB | 行数 |
+|---|---|---|---|
+| `twang2218/chinese-law-and-regulations` | `COLD-1_*` | 152.8 | 22,552 |
+| `C-MTEB/T2Retrieval` | `A1_*` | 150.3 | corpus 118,605 / queries 22,812 |
+| `C-MTEB/DuRetrieval` | `A2_*` | 61.5 | corpus 100,001 / queries 2,000 |
+| `C-MTEB/CovidRetrieval` | `A3_*` | 62.1 | corpus 100,001 / queries 949 |
+| `C-MTEB/EcomRetrieval` | `E1_*` | 8.1 | corpus 100,902 / queries 1,000 |
+| `C-MTEB/CmedqaRetrieval` | `M4_*` | 58.5 | corpus 100,001 / queries 3,999 |
+| `mteb/LeCaRDv2` | `L2_*` | 150.5 | corpus 3,795 / queries 159 |
+| `bigbio/med_qa` zh | `M2_*` | 4.9 | 27,400 |
+| `BeIR/fiqa` + qrels | `P1_*` | 26.7 | corpus 57,638 / queries 6,648 |
+| `ShengbinYue/DISC-Law-SFT` | `P1_*` | 552.4 | Pair 166,758 / Triplet 16,000 |
+| `McAuley-Lab/Amazon-Reviews-2023` | `P2_*` | 386.3 | review 701,528 / meta 112,590 |
+| `PleIAs/SEC` 2022-2024 | `P2_*` | 2,308.5 | 2022: 8,348 |
+| **合计** | | **3.73 GB** | ~105 万行 parquet |
+
+**`docs/DATA.md` 与实测不符（4 处，待修订）**：
+1. `mteb/LeCaRDv2`：文档 800 q / 55,192 cases → **实测 159 q / 3,795 cases**
+2. `C-MTEB/*-qrels` 字段：文档 `{query-id, corpus-id, score}` → **实测 `qid, pid, score`**（那是 BeIR/LeCaRD 格式，三套不统一）
+3. `T2Retrieval` queries 文档 24,832 → **实测 22,812**；`DuRetrieval` 文档 4,000 → **实测 2,000**
+4. `Amazon raw_meta_All_Beauty` 文档 807 MB / 801,446 行 → **实测 59.6 MB / 112,590 行**；且**仓库无 `raw_review_All_Beauty` parquet**，review 走 `raw/review_categories/All_Beauty.jsonl`
+5. `twang2218` 是 **88% 地方性法规**（19,773），非文档暗示的「国家法律」（法律仅 429）
+
+---
+
+## E-004 冷启动诊断 on **真实 backbone** `[✅ 有效]`
+
+**环境/配置**
+- backbone: `BAAI/bge-small-zh-v1.5`（**23,953,920 参数，冻结**），hidden 512 / 4 层
+- 其余同 E-001；epochs=2, bs=32, lr=1e-3, max_len=64
+- 数据: 合成 medical（**仅用于诊断机制，不用于结论**）
+
+**原始输出**
+```
+backbone=BAAI/bge-small-zh-v1.5  hidden=512  layers=4
+epoch 0: loss 1.3577    epoch 1: loss 1.3184
+
+[H1] matcher fires BEFORE write: 0/200 (0.0%)
+[H1] matcher fires AFTER  write: 200/200 (100.0%)
+
+[H2] gate alpha ALL positions: mean=0.5347 p50=0.6129 p95=0.9994 max=0.9999
+[H2] gate alpha MATCHED positions (n=200): mean=0.1563 min=0.0147 max=0.4378 -> OPEN
+
+[H3] 22/23 engram/registry params 收到梯度
+     registry_table.emb.weight: STILL-AT-INIT (max|d|=0.000000)
+     cold-start wrote max|d|=0.428092
+
+[DELTA] ||emb(ON)-emb(OFF)||: mean=0.45905 max=0.52279
+[ORIENT] cos(emb_ON, emb_OFF): mean=0.8942 p05=0.8763 min=0.8633
+```
+
+**结论**
+
+| 假设 | 判定 | 依据 |
+|---|---|---|
+| **H1 写入没落地** | ❌ **排除** | 匹配率 0/200 → 200/200 |
+| **H2 门控压制（α≈0）** | ❌ **排除** | matched α=0.1563，远高于 0.05 阈值 |
+| **H3 W_V/W_K 注册表列随机** | ❌ **排除** | 22/23 参数收到梯度；且 W_V 是**共享投影**非按行参数 |
+| **H4 写入过度（覆写 backbone）** | ❌ **排除** | cos=**+0.894**（tiny 上 -0.044 是伪影），Δemb=0.459 属合理修正 |
+
+**H3 原始表述本身有误**：`W_V` 是拼接后的共享线性投影，不存在「注册表列」。真正未训练的是 `registry_table.emb.weight`（C 期间 registry 为空，梯度为 0）——但这**不阻止**冷启动写入可用，因为 `W_V` 已被 hash 列训练过。
+
+**新线索 H5（待验证）**：真 backbone 的 matched α=**0.1563**，**低于** tiny 的 0.2520。C 阶段 registry 全空、匹配率 0，gate 收到的一致信号是「没有可靠记忆」，因而学成对未训练 registry 低信任。**H5：写入方向可能有用，但门控幅度不足以改变排序。**
+
+**⚠️ 本实验的局限**：数据仍是合成的（饱和+自证）。诊断只能回答「机制是否按设计工作」，**不能**回答「冷启动是否提升检索质量」。
+
+---
+
+## E-005 真实评测集饱和度验证 `[✅ 有效]`
+
+**目的**：验证合成数据饱和问题在真实数据上消失。
+
+**数据**：`build_real_eval.py --dataset t2retrieval --out data/real/eval/t2 --n-queries 2000`
+- 真实搜索日志 query，corpus 118,605，qrels 覆盖 **100%** query，平均 **5.2 个正例/ query**
+- 构建时清洗 T2 特有的 `<br>`/`<img>` HTML 噪声（否则纯词形匹配即可取胜）
+- 负例从同 mini-corpus 池按字符重叠度优先采样（硬负例）
+- gold 索引已校验全部合法（`0 <= gold < len(corpus)`）
+
+**原始输出**（真 backbone，memory OFF，500 queries）
+```
+A baseline on REAL T2: {'recall@1': 37.4, 'recall@3': 74.0, 'recall@5': 95.0,
+                        'recall@10': 100.0, 'mrr': 59.1, 'ndcg@10': 69.14}
+```
+
+**结论**
+
+| | 合成 seen (E-001) | **真实 T2** |
+|---|---|---|
+| A baseline R@1 | **100.0** ❌ 饱和 | **37.4** ✅ |
+| A baseline nDCG | **100.0** ❌ | **69.14** ✅ |
+| 可提升空间 | **0** | **62.6 R@1** |
+
+bge-small-zh 在真实搜索日志上仅 37.4 R@1，**这才是真实水平**；合成数据的 100.0 是彻底的幻觉。真实集可作为实验平台。
+
+---
+
+## E-006 CPU 训练吞吐实测 `[✅ 有效]`
+
+**目的**：确认本机能否训练。
+
+**配置**：真 backbone（冻结），batch=32，max_len=64，2000 triplets，**可训练 221,794 参数**
+
+**原始输出**
+```
+62 steps in 33.0s  ->  0.533 s/step, 1.88 steps/s
+epoch (2000 triplets) = 33.0s = 0.55 min
+```
+
+**结论**
+- **本机可训练**。backbone 冻结（只前向不反传）是最大节省
+- 2000 triplets × 10 轮 ≈ **5.5 分钟**
+- 854k triplets（DATA.md 完整配方）× 1 轮 ≈ **7.9 小时**
+- **限制**：仅万级 triplet 的实验规模在本机可行；全量配方需 GB10
+
+---
+
+## E-007 真实 T2 训练基线（**项目首个真实训练信号**）`[✅ 有效]`
+
+**目的**：回答「在真实数据上 loss 到底降不降」。
+
+**配置**
+- backbone `BAAI/bge-small-zh-v1.5`（冻结），layer_ids=[1,3]
+- **query_len=64 / doc_len=512**（见下方长度分析）
+- batch=32，epochs=10，lrs 扫描 `1e-3, 3e-4`，eval 每 2 轮
+- train=2000 triplets / eval=500 queries
+- 数据 `data/real/eval/t2`，可训练 221,794 参数
+
+### E-007a 长度参数决策（前置实验）
+
+**实测 token 长度分布**（T2，300 queries × 10 candidates）
+```
+query           mean= 10.7  p50= 10  p90= 15  p95= 17  max= 27
+all candidates  mean=404.6  p50=470  p90=505  p95=507  max=512
+GOLD doc only   mean=324.2  p50=359  p90=499  p95=506  max=511
+```
+
+**截断保留率**
+| max_len | 候选保留 | GOLD 保留 |
+|---|---|---|
+| 64 | 15.7% | **19.0%** |
+| 128 | 31.0% | 36.4% |
+| 256 | 59.7% | 65.7% |
+| 384 | 83.9% | 87.1% |
+| 512 | 100% | **100%** |
+
+**决策**：原 `max_len=64` 只保留 GOLD 的 19%，是错误配置。改为**不对称长度**
+（`query_len=64` / `doc_len=512`），既贴合真实部署（query 短/doc 长），
+又避免用 512 pad query。已为此修改 `de/data.py`（`DECollator` 新增
+`query_max_len` 参数）。
+
+### E-007b 训练结果
 
 ```
-hashed N-gram tables  : 2 orders × 8 heads = 16 tables × 16 384 × 16 d_head = 4 194 304
-registry table        : 50 000 slots × 32                                       = 1 600 000
-fusion (1 site)       : d_mem = 16·16 + 32·4 = 384
-                        W_V 384×512 = 196 608 ; W_K 384×512 = 196 608
-                        RMSNorm_q/k/v 3×512 = 1 536 ; gate_bias 1 ; conv 512×4 = 2 048
-                                                                       total =  396 800
--------------------------------------------------------------------------------------
-DE-Ref-S trainable                                            ≈ 6 191 104  (6.19 M)
-backbone non-embedding params                                           12 582 912  (12.58 M)
-backbone total                                                          ≈ 24 M
+=== lr=0.001, 10 epochs ===
+  ep00  loss 0.1348  [248s]
+  ep01  loss 0.0878  R@1 39.8  nDCG 70.8  [497s]
+  ep03  loss 0.0116  R@1 41.0  nDCG 71.5  [1293s]
+  ep05  loss 0.0049  R@1 41.0  nDCG 71.5  [2094s]
+  ep07  loss 0.0022  R@1 43.0  nDCG 72.6  [2909s]
+  ep09  loss 0.0078  R@1 42.6  nDCG 72.6  [3694s]
+  [lr=0.001] loss 0.1348 -> 0.0078 (drop +0.1270)  nDCG 69.7 -> 72.6  [3990s]
+
+=== lr=0.0003, 10 epochs ===
+  ep00  loss 0.1352
+  ep09  loss 0.0146  R@1 42.0  nDCG 72.3
+  [lr=0.0003] loss 0.1352 -> 0.0146 (drop +0.1206)  nDCG 69.7 -> 72.3  [4055s]
 ```
 
-**DE-Ref-S trains 49 % of the backbone's own transformer parameters.** PLAN.md's current default
-config (`d_head=32`, `table_size=65536`, `200 000 × 64` registry) yields
-`16·65 536·32 + 200 000·64 + 0.79 M ≈ 33.55 + 12.80 + 0.79 = 47.1 M` trainable — **~2× the entire
-backbone**. That config cannot be used for any iso-parameter claim; `DE-Ref-S` replaces it. Four
-budgets are used throughout:
+**结论**
 
-| Budget | Hashed tables | Registry | d_head | Trainable |
+| | E-001 (旧) | **E-007** |
+|---|---|---|
+| loss 降幅 | 1.358 → 1.318 (**−0.04**) | 0.135 → **0.0078**（**降至 5%**） |
+| 起点 loss | 1.36（≈2× 随机基线 ln2） | **0.135** |
+| nDCG 增益 | +0.00（饱和） | **+2.9**（69.7 → 72.6） |
+| R@1 增益 | — | **+5.2**（37.4 → 42.6） |
+
+**记忆模块在真实数据上确实有效**（R@1 +5.2）。`lr=1e-3` 略优于 `3e-4`。
+
+**收敛行为**：loss 在 ep07 触底 0.0022，之后回升至 0.0078 —— **轻微过拟合**。
+nDCG 在 ep07 达峰 72.6 后持平。**最佳停止点 ≈ ep07**。
+
+**⚠️ 本实验的两点局限**：
+1. **起点 loss 0.135 偏低**。InfoNCE 随机基线为 ln(batch)=ln(32)≈3.47，
+   0.135 说明 T2 的正负例**太好区分**（正例是 qrels 命中，负例虽词面重叠
+   但非 qrels 相关）→ 仍是一种温和的自证，只是远好于合成数据的 R@1=100
+2. **这不是冷启动实验**。测的是 Layer-B（hashed N-gram）在**训练见过的数据**上的
+   效果；**registry 全程为空，冷启动写入一次都没测**
+
+### E-007c ⚠️ 发现缺陷：硬负例被丢弃 `[已修正待重跑]`
+
+**核对代码时发现 `train_baseline.py` 没用硬负例。**
+
+| | 代码 | 是否用 negatives |
+|---|---|---|
+| 正式训练循环 `de/train.py:151-159` | `if "negative" in batch: info_nce_with_hard_negatives(...) else: info_nce(...)` | ✅ 两分支 |
+| **`train_baseline.py:116`** | `loss = info_nce(qe, de)` — 只有 else 分支 | ❌ **丢弃** |
+
+**后果**
+1. `build_real_eval.py` 生成的每条样本 **3 个 BM25 硬负例全部被浪费**，
+   只剩 in-batch 的 31 个负例
+2. 这**很可能就是**起点 loss=0.135 的真正原因（而非「任务自证易」）——
+   in-batch 负例区分度不足，模型几乎不用学就能拉开
+3. **潜在泄漏**：`build_real_eval.py` 的 `train.jsonl` negatives 与 `eval.jsonl`
+   的 corpus 取自**同一个 mini-corpus 池**。若日后启用硬负例，必须先确认
+   训练负例与评测 corpus 不交叉
+
+**对 E-007 结论的影响**
+- `+5.2 R@1` 是**打了折扣**的数字（未用硬负例），真实上限应更高
+- 「自证」这一判断**可能下错**，需用修正版重跑后重新判定
+
+**处置**：已记录，待用 `info_nce_with_hard_negatives` 重跑修正版
+
+### E-010a 修正版训练 —— ⚠️ 本机超时中断，迁移 GB10
+
+**修正内容**
+1. `train_baseline.py` 改用 `info_nce_with_hard_negatives`，显式构造 `TripletDataset`
+   保证 `n_hard_neg=3` 全部进入 loss（原先 `TripletDataset(train_rows)` 走 dict
+   直通，虽保留全部负例但 loss 丢弃）
+2. 新增 `--leak-check` / `--no-hard-neg` / `--n-hard-neg` / `--temperature` 开关
+3. **`build_real_eval.py` 重写为先切分再构造**（详见 E-010b）
+
+**数据重建结果**（`data/real/eval/t2_v2`）
+```
+queries=22812  corpus=118605  usable_qrels=22812
+eval_qids=1000   train_qids=21812
+hard-neg scan pool: 2000 docs (char sets precomputed)
+[leak-check] train_neg in eval: 1   train_pos in eval: 1   train_query in eval: 0
+eval.jsonl  1000 queries (avg 13.7 candidates)
+train.jsonl 8000 triplets
+```
+
+**启动后的实测输出（2 epoch 后中断）**
+```
+[leak] negatives also present in eval corpus: 1 (0.01%)
+[leak] eval queries also used as train query: 0
+=== lr=0.001, 10 epochs, hard_neg=True, temp=0.02 ===
+  ep00  loss 1.5187  [4197s]
+  ep01  loss 1.2645  R@1 35.9  nDCG 68.6  [8373s]
+```
+
+**关键结论：起点 loss 从 0.135 → 1.5187，证实 E-007c 的判断。**
+E-007 那个异常低的起点是**硬负例被丢弃**所致，不是「任务自证偏易」。H6 需重判。
+
+| | E-007（有缺陷+泄漏） | **E-010a（修正版）** |
+|---|---|---|
+| 起点 loss | 0.135（异常低） | **1.5187**（≈ln(32)/2，合理） |
+| 起点 R@1 | 37.4 | 35.9 |
+| eval query 泄漏 | **20/20 (100%)** | **0** ✅ |
+
+**中断原因**：单 epoch **4197s ≈ 70 分钟**，远超预估（4.4 分钟，**差 16×**）。
+`n_train` 2000→8000（4×）、`n_eval` 500→1000（2×）、doc=512 × bs=32 × 4 流
+（query + positive + 3 negatives）叠加所致。2 个 lr × 10 轮 = **~24 小时**，
+超出本机合理预算。
+
+**判定**：`[数据✅ 已修复]` / `[训练⚠️ 仅 2 epoch，不足以判定]`
+**已取得的有效信息**：修正版起点 loss 与零泄漏基线。趋势待 GB10 补全。
+
+### E-010b `build_real_eval.py` 泄漏修复 `[✅ 有效]`
+
+**发现的泄漏**（E-007/E-005 用的 `data/real/eval/t2` 全部受影响）
+
+原实现用同一个 query 池同时生成 train 和 eval：
+
+| 检查项 | 实测 | 影响 |
+|---|---|---|
+| 评测 query 被用作训练 query | **20/20 (100%)** | E-007 评测集 = 训练集 |
+| 训练正例出现在评测 corpus | **20/20 (100%)** | 同上 |
+| 训练负例出现在评测 corpus | **61/192 (31.8%)** | 负例污染 |
+
+**因此 E-005 的「真实集不饱和 A=37.4 R@1」与 E-007 的「+5.2 R@1」均建立在泄漏之上**，
+虽因 memory 初始无增益（E-007 组 A/B/C 全 100.0）未实际放大误差，但结论不可外推。
+
+**修复**：先按 query id 切分 `eval_qids` / `train_qids`，再用 `eval_docs` 集合
+禁止任何训练文档出现在评测侧。修复后泄漏降至 1 条（0.01%，来自 qrels 多正例
+共享同一文档的边界情况）。
+
+**顺带修复的性能缺陷**：原实现对**每条 query** 重建 `set(c[pid][:400])`
+（O(n_q × hard_scan × doc_len)），全量构建 **>15 分钟未完成**。
+改为一次性预计算 2000 篇文档的字符集后复用 → 构建时间降到**秒级**。
+
+### E-007d N-gram 寻址机制澄清 `[✅ 有效]`
+
+**结论：N-gram 不是「挖」出来的，没有词表、没有统计、没有剪枝。**
+
+实现见 `de/hashing.py:226` `NgramHashMapping.hash_layer()`——对每个 token 位置、
+每种阶数、每个 head 现场算一行索引：
+```
+z_{t,n,k} = ( ⊕_{i=0}^{n-1}  x_{t-i} · m_i )  mod  P_{n,k}
+```
+- **后缀约定**：位置 t 的 n-gram = `x_{t-n+1..t}`，在位置 t **末尾**结束
+  （对齐 Engram 论文的 suffix N-gram；`PhraseMatcher` 用同一约定）
+- **确定性**：`z` 是 token id 的纯函数、无运行时状态 → 这是它可 CRUD / 可预取的前提
+- **多 head**：`n_head_per_ngram` 个 head 用**互不相同的素数**取模，
+  同一个 N-gram 落到不同表的行，起多视角作用
+
+**槽位容量实测**（vocab=21128）
+
+| 配置 | 总槽位 | 2-gram 理论空间 (21128²) | 3-gram 空间 (21128³) | 参数量(d_head=8) |
 |---|---|---|---|---|
-| **XS** (cheapest kill-shot) | 16 × 4 096 | 10 k × 16 | 8 | **≈ 0.88 M** |
-| **S (reference)** | 16 × 16 384 | 50 k × 32 | 16 | **≈ 6.19 M** |
-| **L** | 16 × 16 384 | 100 k × 64 | 32 | **≈ 15.58 M** |
-| **XL** | 16 × 65 536 | 200 k × 64 | 32 | **≈ 47.1 M** |
+| **E-007 实际** (`table=1024, n_head=2`) | **8,396** | 4.5 亿 → **0.002%** | 9.4×10¹² → **≈0** | 67,168 |
+| `config.py` 生产默认 (`65536, n_head=8`) | **2,101,122** | 4.5 亿 → **0.47%** | 9.4×10¹² → ≈0 | 16,808,976 |
 
-(fusion adds 0.20 / 0.40 / 0.79 / 0.79 M for XS / S / L / XL respectively)
-
-### 1.5 Training-FLOP arithmetic (the iso-compute anchor)
-
-Per-token MACs, `bge-small-zh-v1.5`, non-embedding `P = 12.58 M`, attention term negligible:
-
-| Arm | fwd | bwd | step cost |
-|---|---|---|---|
-| Full fine-tune | 2P | 4P | **6P** |
-| LoRA (all layers) | 2P | 4P (activation grads still needed everywhere) | **≈6P** |
-| **DE, frozen, inject @ layer 1 of 4** | 2P | 4P·(3/4) | **5P** |
-| DE, frozen, inject @ layer 3 of 4 | 2P | 4P·(1/4) | 3P |
-
-DE module's own MACs/token: `W_V + W_K = 2·384·512 = 393 216` → **+3.1 %** over the backbone.
-Adam state cost ≈ 6 FLOP/param/step ≈ 37 MFLOP per *step* → **+0.01 %/token** at batch 64 × 128
-(8 192 tokens/step). Embedding gather + its backward on touched rows adds ≤ +0.2 %/token. **Measure
-this in P0; do not quote it from this table.**
-
-> **Honest consequence.** On a *4-layer* encoder, freezing the backbone and injecting at layer 1
-> saves only **17 %** of training FLOPs. The compute advantage of DE is **not** the story. DE's real
-> advantages are (i) *trainable-parameter count* and (ii) *post-deployment update latency*. Any write-up
-> that claims a compute win is wrong at our scale and must not be made.
-
-**Compute-matched protocol.** With DE at batch `B`, the compute-matched baseline batch is
-`B' = round(6P / 5P · B) = 1.20·B`. At `B = 64` → `B' = 77`. Because a larger InfoNCE batch also gives
-the baseline *more in-batch negatives*, we run **both** arms and report separately:
-* `matched-batch` (B = 64 everywhere; matched negatives, DE gets more FLOPs per step), and
-* `matched-FLOPs` (baseline B = 77; matched compute, baseline gets more negatives).
-Reporting only one of these is a fatal protocol error.
-
-### 1.6 Eval harness tiers
-
-| Tier | Contents | Cost | Used for |
-|---|---|---|---|
-| **Tier-0 (smoke)** | 200 queries × 1 000-candidate subsample from EcomRetrieval + MedicalRetrieval | ~1 min | smoke tests, kill-shot |
-| **Tier-D (domain)** | C-MTEB `EcomRetrieval`(1000 q), `MedicalRetrieval`(1000), `CmedqaRetrieval`(3999), `VideoRetrieval`(1000), `CovidRetrieval`(949) — nDCG@10 over 100 000 sampled candidates `[REF]` | ~20 min/arm | **primary metric** |
-| **Tier-G (general guard)** | C-MTEB `T2Retrieval`(24 832), `MMarcoRetrieval`(7 437), `DuRetrieval`(4 000) | ~90 min/arm | forgetting guard |
-| **Tier-S (STS guard)** | `ATEC, BQ, LCQMC, PAWSX, STSB, AFQMC, QBQTC` (Spearman) | ~15 min/arm | forgetting guard |
-| **Tier-X (full)** | all of C-MTEB + MTEB(cmn,v1) | ~4 h/arm | final report only |
-| **Tier-CS (cold-start)** | custom held-out term split, §3.5 | ~10 min | **headline metric** |
-
-All dataset names/sizes above are `[REF]` from the C-MTEB 1.1.1 / FlagEmbedding task table. Retrieval
-protocol follows C-MTEB: **100 000 candidates sampled per query including the gold document**.
-
----
-
-## 2. Control groups A / B / C / D (+ the controls PLAN.md conflates)
-
-PLAN.md §5 lists four groups but describes B as "memory present but random / no gate", which are
-**two different controls**. They are separated here, and two controls PLAN.md omits entirely are added
-(`A1` and `F`), because without them the central claim "the memory, not the extra capacity, is what
-helps" is unfalsifiable.
-
-| ID | Config | Trained | Frozen | Hypothesised result & reasoning |
-|---|---|---|---|---|
-| **A0** | `bge-small-zh-v1.5`, no memory, **zero trainable params** | nothing | everything | Reproduces the published 61.77 C-MTEB Retrieval ±0.5 `[REF]`. This is the *reference point*, not a competitor. |
-| **A1** | frozen backbone + **6.19 M trainable projection/gating head** (2-layer MLP `512→1024→512`, randomly init, trained with the same InfoNCE data/steps) | the head | backbone | **≈ A0, maybe +0.5–1.5.** This is the *capacity control*: any gain of `C` over `A0` that `A1` also gets is not a memory effect. **This is the most important control in the matrix.** |
-| **B1** | memory present, **randomly initialised, never trained**, gate active, residual injection on | nothing | everything | **≈ A0 ± 0.5.** Engram's design says random `e_t` gives an essentially arbitrary `v_t`; the gate cannot suppress it because `α` is computed from a random key. Expect a *small* random degradation, not a collapse, because conv is zero-init and `W_V` is small at init. Tests "does the module just add noise". |
-| **B2** | **memory trained, gate removed** (`α ≡ 1`) | tables, W_V, conv | backbone, W_K, gate params | **Worse than C by the largest single-component margin.** Engram Sec 6.2 ranks context-aware gating #2 of 3 components `[REF]`. If B2 ≈ C, the gating claim does not transfer to bi-encoders → **falsifier F4**. |
-| **B3** | **memory trained, `W_V := 0`** (lookup happens, value path dead) | tables, W_K, gate, conv | backbone, W_V | **≈ A0.** Isolates "gradients flow into the tables" from "the injection path carries information". A cheap sanity control: if B3 ≠ A0 the harness is leaking. |
-| **C** | **full DE**, `DE-Ref-S`, trained Stage-1 | tables + registry + fusion | backbone | **> A0 on Tier-D.** Reasoning: Engram Sec 6.3 shows that suppressing the memory at inference collapses *factual-knowledge* tasks to 29–44 % of score while reading comprehension retains 81–93 % `[REF]`. Retrieval of domain terms is fact-lookup-like, not context-grounded reading comprehension, so we predict DE >> 0 sensitivity. This is the paper-grounded expectation we are testing. |
-| **D** | **`C` + post-hoc registry writes**, zero retraining, on terms unseen in training | **only the new slot rows** (closed-form ridge solve; optional single-row refine) | everything else, incl. hashed tables and backbone | **D > C on Tier-CS, ≈ C on Tier-D/G** (writes touch only unseen terms). If D also improves Tier-D, that means the written terms are not actually unseen → contamination, not a win. |
-| **E** | `C` **+ retrain after the same writes** (full Stage-1 replay including the new documents) | everything | backbone | **Oracle upper bound** for "what you'd get if you could afford to retrain". If `D ≥ E`, the no-retraining claim is a *strict* win. If `E >> D`, we must say so. |
-| **F** | `C` retrained **with the cold-start documents included from the start** (oracle: model saw the terms) | everything | backbone | **Oracle ceiling for the terms themselves.** If `D ≈ F`, the post-hoc write fully recovers what training-on-those-terms would give → the killer result. If `F >> D`, the cold-start claim is much weaker than "no retraining needed". |
-| **G** | `C` + poisoned registry entries (deliberately wrong vectors for N common terms), then deleted | nothing | everything | **Recover to ≥ 98 % of the pre-poison score** (tombstone + gate safety). Gate is the safety mechanism (PLAN §1.3); this tests it. |
-
-**Minimum claim set:** the paper may claim *anything* only if `C > A0` **and** `C ≥ A1` **and**
-`C ≥ best iso-parameter baseline` **and** `D > C` on Tier-CS. All four, or no claim.
-
----
-
-## 3. External baselines
-
-### 3.1 Published encoders — **context, not competitors**
-
-These are *different backbones*. They tell us the ceiling, not whether our mechanism works. They are
-reported in the final table and never used to justify or refute C1/C2.
-
-| Model id | Params | Emb dim | C-MTEB Avg | C-MTEB Retrieval | Source |
-|---|---|---|---|---|---|
-| `BAAI/bge-large-zh-v1.5` | 325 M | 1024 | 64.53 | 70.46 | `[REF]` C-MTEB 1.1.1 |
-| `BAAI/bge-base-zh-v1.5` | 102 M | 768 | 63.13 | 69.49 | `[REF]` |
-| `BAAI/bge-small-zh-v1.5` | 24 M | 512 | 57.82 | 61.77 | `[REF]` |
-| `intfloat/multilingual-e5-small` | 118 M | 384 | 55.38 | 59.95 | `[REF]` (12 layers, 512 ctx, mean-pool) |
-| `BAAI/bge-m3` | 568 M | 1024 | — (`UNVERIFIED` per-task C-MTEB) | — | `[REF]` size; multilingual dense+sparse |
-| `Qwen/Qwen3-Embedding-0.6B` | 0.6 B | 1024 (28 layers) | 66.33 | 71.03 | `[REF]` Qwen3-Embedding card |
-| `Qwen/Qwen3-Embedding-4B` | 4 B | 2560 (36 layers) | 72.27 | 77.03 | `[REF]` |
-| `Qwen/Qwen3-Embedding-8B` | 8 B | 4096 (36 layers) | 73.84 | 78.21 | `[REF]` |
-| `gte-Qwen2-1.5B-instruct` | 1.5 B | — | 67.12 | 71.86 | `[REF]` Qwen3-Embedding card comparison table |
-| `gte-Qwen2-7B-instruct` | 7.6 B | — | 71.62 | 75.70 | `[REF]` |
-
-**Live leaderboard position is a moving target.** A snapshot taken during this design showed
-`MTEB(cmn, v1)` with 60 models / 31 tasks, and `ritrieve_zh_v1` (0.3 B, C-MTEB 72.71 / retrieval
-76.97) and `KaLM-Embedding-Gemma3-12B-2511` near the top of the English/multilingual boards.
-Their HF ids and current C-MTEB ranks are **`UNVERIFIED`** — take a dated snapshot of
-`mteb-leaderboard.hf.space` before writing any "SOTA comparison" sentence.
-
-**Implication:** `bge-small-zh-v1.5` (61.77) sits **~15 nDCG points** below `Qwen3-Embedding-8B`
-(78.21). Any paper claiming DE closes that gap from a 24 M frozen backbone is not credible. DE must
-be framed as *a cheap adaptation mechanism for a fixed small backbone*, never as a general SOTA
-embedding model.
-
-### 3.2 The closest competitor: static vocabulary / embedding expansion
-
-**`arXiv:2509.26124` — "Vocabulary Customization for Efficient Domain-Specific LLM Deployment"**
-(Herold, Kozielski, Santavas, Versley, Khadivi — eBay; NEURIPS 2025 CCFM Workshop; submitted
-2025-09-30). `[REF]` — title, authors, venue and abstract verified on arXiv.
-
-**Do not confuse it with a second paper of the same name:** Nakash et al., *"AdaptiVocab: Enhancing
-LLM Efficiency in Focused Domains through Lightweight Vocabulary Adaptation"*, **`arXiv:2503.19693`**
-`[REF]`. Herold et al. cite it and note that "at the time of writing, they have not yet released their
-code" `[REF]`. Both are LLM (autoregressive) tokenizer-extension methods; neither is an embedding
-method.
-
-**Precisely how it works** `[REF]`: (1) train an in-domain BPE tokenizer; (2) append its
-non-overlapping tokens **and their merge rules** to the base tokenizer, chosen by an algorithm that
-*guarantees* token count never increases for any input; (3) initialise the new embedding/projection
-rows as the mean of the constituent tokens (following Yao et al. 2021); (4) **continue training the
-whole model** — 10 000 iterations on 480 H100s, < 24 h — so the model learns to use the new rows;
-(5) evaluate.
-
-**Measured outcome** `[REF]`: on e-commerce, up to **20 % shorter sequences**, ~**8 % mean speedup**
-(up to 20 %) at 30 k added tokens, +1 % forward-pass time for the larger embedding matrix, and —
-critically — **quality unchanged-to-slightly-worse**: NLU 60.5 → 60.1, E-commerce NLU 42.4 → 42.9,
-E-commerce Lead gen 60.5 → 60.1, Lead 47.9 → 47.6. And the model *prefers* the new tokenisation only
-~98 % of the time on sequences > 15 words.
-
-| Dimension | Herold et al. 2509.26124 / AdaptiVocab 2503.19693 | **Domain Engram** |
-|---|---|---|
-| What changes | **tokenizer + input embedding table + LM head projection** | **nothing** — tokenizer, embeddings and backbone weights are byte-identical |
-| Objective | **inference efficiency** (token fertility, RPS) | **retrieval quality** + update latency |
-| Requires retraining | **Yes** — 10 k steps, 480× H100, < 24 h `[REF]` | **No** for a new term (closed-form ridge solve on one row) |
-| Per-token FLOP growth | **+1 %** for 30 k tokens, growing with vocab `[REF]` | ≈ +3 % constant, independent of table size |
-| Adding a term later | requires extending merges, re-tokenising the corpus, **re-indexing the collection**, and re-training the new rows | allocate slot + write one row + (amortised) matcher rebuild — **no re-indexing of the vector store** |
-| Effect on quality in their own eval | **≈ 0 (marginally negative)** `[REF]` | unknown — this is our experiment |
-| Bi-encoder / retrieval | not evaluated | this is our target |
-
-**The comparison that isolates our contribution** (this is the single most important external
-experiment):
-
-> **V-EXP (vocabulary-expansion arm).** Take `bge-small-zh-v1.5`, run Herold-style vocabulary
-> extension on our domain corpus: train a domain BPE on the e-commerce corpus, add the top-K
-> non-overlapping tokens (K swept over {1 k, 4 k, 16 k}) with merge rules, mean-initialise the new
-> embedding rows, resize the embedding matrix, and **fine-tune with the same InfoNCE data/steps** as
-> `C`. Evaluate on Tier-D. Report nDCG@10, trainable params, wall-clock, and index size.
->
-> **What it isolates:** whether *any* form of "give the model a dedicated representation for a domain
-> term" beats the *same* information delivered through a side-channel. Three outcomes:
-> - V-EXP ≥ C → the gain is about **having** a term representation, not about **how** it is delivered.
->   Our story weakens to "we are a cheaper-to-update way of getting vocabulary expansion", which is
->   still a defensible paper but a much smaller one.
-> - C > V-EXP by ≥ 1.5 nDCG@10 → our residual injection + gating genuinely beats input-layer
->   expansion for retrieval. This is the strong version of the claim.
-> - Both ≈ A0 → the whole domain-memory premise is wrong for a 24 M encoder, and we should say so.
-
-Note the parameter asymmetry we must control for: V-EXP adds `K × 512` embedding rows
-(1 k → 0.5 M, 16 k → 8.4 M), which is **not** free at training time (the embedding+logits matmul
-grows), whereas DE's hashed tables are pure gathers. Report both param counts and both wall-clocks.
-
-### 3.3 Continued contrastive pretraining (CPT) — the key "is it just domain data?" control
-
-**Definition.** Same backbone, same domain corpus, **all** (or a matched subset of) backbone weights
-trainable, standard contrastive objective. This is the baseline that says "the model just needed to
-see e-commerce text".
-
-- **Cost:** full fine-tune of `bge-small-zh-v1.5` is 24 M trainable and 6P FLOPs/token. On one GB10
-  this is `[EST]` hours for the same token budget as `C`; `C` itself is ~17 % cheaper (§1.5).
-- **What it does about dynamic updates:** **nothing, gracefully.** Incorporating a new term requires
-  re-running CPT over a corpus containing it. There is no per-term write path.
-- **GB10:** yes, trivially — a 24 M model fits in unified memory many times over.
-- **Two variants, both mandatory:**
-  - **CPT-full**: all backbone params trainable. Upper bound on "domain data helps".
-  - **CPT-matched**: trainable params matched to `DE-Ref-S` (6.19 M) by training only the top-K
-    layers + FFN, or by a rank-512 LoRA — the fair version.
-- **Interpretation:** if `CPT-matched ≥ C` (within 0.5 nDCG@10), the memory buys nothing that a
-  param-matched adapter on the same data would not buy → **falsifier F3/F6, stop.**
-
-### 3.4 LoRA / adapter at matched parameter count
-
-- **Cost:** rank grid `r ∈ {4, 8, 16, 32, 64, 128, 256}` on module subsets `{Q,V}`, `{Q,K,V,O}`,
-  `{Q,K,V,O,FFN}`; step FLOPs ≈ same as full FT (§1.5) because activation gradients are still needed.
-- **Matching rule:** for `DE-Ref-S` = 6.19 M on a 4-layer/512-dim encoder, LoRA param count is
-  `Σ 2·r·(d_in + d_out)`. Over `{Q,K,V,O}` all layers this is `16 384·r`, so 6.19 M ⇒ **r ≈ 378**;
-  over `{Q,K,V,O,FFN}` it is `36 864·r` ⇒ **r ≈ 168**. Both are large enough that "LoRA" is close to
-  "dense adapter" — an honest observation we must state. Report the **matched-rank point** *and* the
-  best point on the full rank curve, plus an interpolation of DE's budget onto the curve.
-- **Dynamic updates:** LoRA can be incrementally updated per term (add a per-term delta) but every
-  write changes the model globally and requires re-running inference over the corpus. It has no
-  O(1) write and no delete. This is DE's genuine differentiator — but see §6 `G4`, which is where we
-  will find out whether it matters in practice.
-- **GB10:** yes; `peft` supports LoRA on BERT.
-
-### 3.5 Add the terms to the tokenizer and retrain — "the obvious way"
-
-Covered by V-EXP (§3.2) but listed separately because PLAN.md §3.2's "add terms to Registry" is easy
-to confuse with it. Key extra numbers to report for this arm: corpus re-index time after tokenisation
-changes, and the k-vec/ONNX rebuild cost. On a 1 M-document e-commerce index this is hours; the
-Registry write is milliseconds. That asymmetry *is* the product claim — and it must be measured, not
-asserted.
-
-### 3.6 Other method families that must appear in the related-work / baseline table
-
-| Family | Representative | Why relevant | Verified |
-|---|---|---|---|
-| **N-gram embedding injection** | **OverEncoding** — "Over-Tokenized Transformer: Vocabulary is Generally Worth Expanding", ICML 2025 (PMLR v267, `huang25bb`) | Engram names it as the closest n-gram-embedding prior art and reports it "fails to yield meaningful improvements on sparse MoE backbones even under a non-isoparametric setting" `[REF]` Sec 7. Direct prior art for our Layer-B. | `[REF]` title/venue; arXiv id `UNVERIFIED` |
-| **N-gram / superword embedding scaling** | **SCONE** — "Scaling Embedding Layers in Language Models", **`arXiv:2502.01637`** (Google) | n-gram embeddings offloaded + contextually encoded. Engram notes SCONE is inference-focused and *adds training FLOPs*, hence incompatible with iso-compute `[REF]`. | `[REF]` id + repo `github.com/llmsresearch/scone` |
-| **Superword tokenisation** | **SuperBPE** (Liu et al., 2025) | merges multi-word expressions into single tokens; same motivation as vocabulary expansion | `[REF]` name only; arXiv id `UNVERIFIED` |
-| **Tokenizer transfer / expansion** | Yamaguchi et al. 2024 (`arXiv:2406.11477`), Csaki et al. 2023 (`arXiv:2311.05741`), Nguyen et al. 2023 (`arXiv:2312.00738`), Dagan et al. ICML 2024, Moisin et al. *Artif. Intell.* 2023, Sachidananda et al. **EMNLP 2021 Findings** (`2021.sustainlp.1.16`), Gee et al. **EMNLP 2022 Industry** (`2022.emnlp-industry.41`), Tai et al. **EMNLP 2020 Findings** (`2020.findings-emnlp.129`), Liu et al. **EMNLP 2024** (`2024.emnlp-main.424`, "Gold panning in vocabulary") | the entire vocabulary-adaptation literature, incl. for **encoder-only** models (which is our setting) | `[REF]` ids |
-| **Efficient tokenizer adaptation** | "Teaching Old Tokenizers New Words: Efficient Tokenizer Adaptation for Pre-trained Models", **`arXiv:2512.03989`** — continued-BPE vocabulary extension, reports that naive "add tokens from an independently trained domain tokenizer" yields unreachable tokens | strongest *recent* methodological rival; should be implemented as the V-EXP variant instead of the naive one | `[REF]` id + claim |
-| **Model-Aware Tokenizer Transfer** | OpenReview `IyV1QEc95F` | transfers attention inter-token communication patterns into the new tokenizer | `[REF]` forum id |
-| **External parametric memory / RAG** | RETRO (`arXiv:2112.08726` `UNVERIFIED`), REALM, PlugLM, Memory+ (`ICML 2025`, openreview `ATqGm1WyDj`) | Engram's own framing of "decoupled, *editable* knowledge store" `[REF]` Sec 7 — this is the intellectual parent of our CRUD registry and must be cited | `[REF]` names; REALM/PlugLM ids `UNVERIFIED` |
-| **Knowledge editing (no retraining)** | ROME (`arXiv:2202.05262` `UNVERIFIED`), MEMIT, AlphaEdit, WISE (NeurIPS 2024) | **the real dynamic-update competitor.** Editing is the field's answer to "update without retraining". It is per-fact, not per-term, but it is the baseline a reviewer will cite. | `[REF]` names; arXiv ids `UNVERIFIED` |
-| **Lifelong editing limits** | "Understanding the Limits of Lifelong Knowledge Editing in LLMs", **`arXiv:2503.05683`**: MEMIT **collapses after ~250 sequential edits**; LoRA-Merge > LoRA-FT but both far below RAG | **this is the strongest ammunition for DE.** Post-hoc parametric editing does *not* scale to thousands of updates. Our D-group writes thousands of rows. | `[REF]` id + collapse figure |
-| **Domain retrieval benchmark (zh medical)** | CMedTEB / CARE, **`arXiv:2604.10937`** (ACL 2026), repo `github.com/PhilipGAQ/CARE` | a curated Chinese-medical embedding benchmark; a good *second* domain and an independent judge | `[REF]` id + repo |
-| **Domain-adapted e-commerce LLM** | Herold et al., "Domain adaptation of foundation LLMs for e-commerce", **ACL 2025 Industry** (`2025.acl-industry.74`) | the CPT recipe that 2509.26124 starts from | `[REF]` |
-
-### 3.7 Baseline feasibility matrix (one GB10, GB10/DGX Spark class)
-
-Hardware `[REF]`: GB10 Grace Blackwell, **sm_121**, 128 GB coherent unified LPDDR5x (64 GB variant
-exists), **273 GB/s** memory bandwidth, 20-core Arm (10× Cortex-X925 + 10× A725), up to
-**1 PFLOP FP4 sparse ≈ 500 TFLOPS dense FP4**, 240 W, 4 TB NVMe.
-
-| Baseline | Fits in 128 GB? | Train time on one GB10 | Per-term dynamic update? | Re-index needed? |
-|---|---|---|---|---|
-| A0/A1/B1–B3/C/D/E/F/G | trivially (< 1 GB) | minutes | — | — |
-| V-EXP (vocab extension) | trivially | `[EST]` 1–3 h (embed resize + same steps) | **No** (needs merge table + retrain) | **Yes, full re-index** |
-| CPT-full (24 M) | trivially | `[EST]` 2–4 h | No | Yes |
-| CPT-matched | trivially | `[EST]` 2–4 h | No | Yes |
-| LoRA grid (7 ranks × 3 subsets) | trivially | `[EST]` 3–8 h total | No (global delta) | Yes |
-| OverEncoding-style input-embedding injection | trivially | `[EST]` same as C | No | Yes |
-| Knowledge editing (ROME/MEMIT) on a bi-encoder | trivially, but **no off-the-shelf bi-encoder editing impl** (`UNVERIFIED`) | n/a | Yes, per-fact | No |
-| `Qwen3-Embedding-8B` (context only) | yes (16 GB bf16) | inference only, `[EST]` ~5× slower than small | No | — |
-
-**Platform prerequisites before any of this runs** (all `[REF]` community reports, all a real risk):
-GB10 is `sm_121` and **aarch64**. Stock x86 PyTorch wheels fail with "unsupported compute
-capability" or "sm_121"; you need a CUDA ≥ 12.8 build (or a nightly / custom sm_121 wheel), and some
-ecosystem packages (e.g. `bitsandbytes`) have no aarch64 wheels. **Run `torch.cuda.is_available()`
-and a 100-step matmul benchmark as the very first item of Phase 0** — a silent CPU fallback would
-invalidate every timing in this document.
-
----
-
-## 4. Ablation grid
-
-### 4.1 Design
-
-**One-at-a-time (OAT) removal from `DE-Ref-S`.** For each variant: disable exactly one component,
-keep everything else (data, steps, LR schedule, seeds, eval) identical. Report Δ vs `C` on Tier-D and
-Tier-G.
-
-Two reporting modes per ablation, because removal usually frees parameters:
-
-* **`free`** — the variant simply has fewer parameters (what the module would cost in practice).
-* **`padded`** — the freed parameters are re-spent (e.g. on table size) so the budget is held
-  constant, matching Engram's "we keep the Engram parameter budget fixed" protocol `[REF]` Sec 6.2.
-  **The `padded` column is the one that supports a causal claim about the component.** The `free`
-  column is what an engineer would actually deploy. We report both; we draw conclusions from
-  `padded`.
-
-### 4.2 OAT table
-
-Engram's Sec 6.2 importance order is **(i) multi-branch fusion, (ii) context-aware gating,
-(iii) tokenizer compression**, then **(iv) depthwise conv (small)**, with **4-grams slightly hurting
-at fixed budget** `[REF]`. Ours, mapped to a plain BERT encoder:
-
-| ID | Disabled | Expected Δ (Tier-D nDCG@10) | Paper basis / our expectation |
-|---|---|---|---|
-| **OAT-1** | **Multi-branch fusion** → synthetic `M=2` split of the residual stream at the injection layer with separate `W_K^(m)`, shared table + `W_V` | **≈ 0 (null)** | **We predict this does NOT transfer.** Engram's branch fusion relies on mHC (M=4) hyper-connections `[REF]`; a BERT encoder has a single residual stream, so there is nothing to branch. Reporting a null here is a *feature*: it tests whether the paper's #1 importance item is architecture-specific. |
-| **OAT-2** | **Context-aware gating** (`α ≡ 1`, drop `W_K` and the Q/K norms) | **largest negative** | Paper rank #2 `[REF]`. Also the mechanism the whole safety story rests on. Falsifier `F4` if null. |
-| **OAT-3** | **Tokenizer compression** (`P = identity`, use raw token ids) | **large negative** | Paper rank #3 `[REF]`. On Chinese, NFKC + lowercase collapse 全/半角 and case variants; without it the same term occupies several hash slots and the table is spent. **This is where we expect the biggest transferable hit.** |
-| **OAT-4** | **Multi-head hashing** (`K = 1` per order) | **moderate negative** | Paper does not rank this separately; collisions rise. |
-| **OAT-5** | **Depthwise causal conv** | **small negative (0 to −0.5)** | Paper: "only marginally degrades" `[REF]`. |
-| **OAT-6** | **Orders {2,3} → {2} only** | **moderate negative** | Removes the most frequent high-signal n-grams. |
-| **OAT-7** | **Orders {2,3} → {2,3,4}** at **fixed budget** | **≈ 0 to small negative** | Paper: 4-grams are "slightly suboptimal under a fixed 1.6B budget — likely because it dilutes capacity from the more frequent 2/3-gram patterns" `[REF]`. We expect the same dilution here and it is a directly falsifiable prediction. |
-| **OAT-8** | **Layer-A registry entirely** (hash memory only) | **Tier-CS: large negative; Tier-D: small** | This is the CRUD contribution. If Tier-D barely moves, DE is just "n-gram embeddings" and the whole paper is thin. |
-| **OAT-9** | **Layer-B hashed memory** (registry only) | **moderate negative on Tier-D** | Isolates pattern memory from term memory. |
-| **OAT-10** | **Residual injection** (compute `y`, discard it) | **must equal A0 to within fp noise** | Harness-integrity assertion, not an ablation. If not, stop. |
-| **OAT-11** | **Gate bias** (`gate_bias_init` → none, pure content-driven α) | **small negative** | Controls whether the gate is doing semantic matching or just acting as a learned global scale. |
-| **OAT-12** | **Pooling**: CLS (ref) vs **mean** vs **last** | **mean ≥ CLS expected** | PLAN §2.1 predicts mean-pooling benefits most because it sees more injection points. Directly testable, cheap. |
-| **OAT-13** | **Gated sqrt variance reduction** (`gate_sqrt`) | ≈ 0 | The official demo applies a signed-√ to the logit; the paper Eq. 4 does not. |
-| **OAT-14** | **Memory LR multiplier** (5× → 1×) | **large negative if 5× matters** | Paper Sec 4.1 `[REF]`. If null, our optimiser recipe differs from theirs and must be reported as such. |
-
-### 4.3 Capacity / budget sweep (Engram Sec 3.2 analogue)
-
-`DE-Ref-XS → S → L → XL`, sweeping total memory slots at a fixed `d_head`, then a fixed-slot
-`d_head` sweep. Report nDCG@10 vs `log(slots)`.
-
-**Pre-registered expectation:** Engram reports a "strict power law (linear in log-space)" for
-validation loss vs number of slots, up to 1e7 slots / ≈13 B params `[REF]` Sec 3.2. We cannot test
-that at 6 M params. **If our curve is flat above 4 M slots, we must explicitly state that the
-"scalable memory axis" claim is unverified at our scale and we have no evidence it survives** — this
-is gate `G6`.
-
-### 4.4 Injection-layer placement sweep
-
-Engram Sec 6.2 `[REF]`, 12-layer 3B MoE, fixed 1.6 B memory: single-module sweep over layers 1–12,
-**layer 2 best (1.770)** vs MoE baseline 1.808; **two half-size modules at layers 2 and 6 → 1.768**,
-slightly better than the best single point. Stated mechanism: early injection offloads local
-pattern reconstruction, but early `h_t` is poorly contextualised for gating — a **trade-off between
-offload depth and gating quality**.
-
-**Our sweep — Tier S (`bge-small-zh-v1.5`, 4 layers, 0-indexed), budget held constant:**
-
-| Sweep | Points | Prediction |
-|---|---|---|
-| **S-sweep-1** (single module) | `{0}, {1}, {2}, {3}` | best ≈ `{1}`; degrades monotonically toward `{3}`; `{0}` worse than `{1}` (no attention round has run, so the gate query is uninformative — Engram says "one round of attention is already sufficient" `[REF]`) |
-| **S-sweep-2** (two half modules) | `{0,2}, {1,2}, {1,3}, {0,3}`, each with **half the per-site budget** | `{1,2}` best, matching `{1,2}` ≳ best single point |
-| **S-sweep-3** (control) | `{}` (no injection) | must equal A0 |
-
-**Our sweep — Tier B (`bge-base-zh-v1.5`, 12 layers) — required before any layer claim is published:**
-
-| Sweep | Points | Cost |
-|---|---|---|
-| **B-sweep-1** | `{0} … {11}` single module at reduced budget | 12 runs |
-| **B-sweep-2** | best-2 split from B-sweep-1, e.g. `{2,6}` vs `{1,4}` vs `{2,8}`, half budget each | 3–4 runs |
-
-Engram's layer-2 result was measured on a **12-layer** backbone; `bge-small-zh-v1.5` has **4**.
-Extrapolating "layer 2" to a 4-layer model is an *assumption*, so the sweep is mandatory and its
-outcome (including "the best layer is not 1") is reported whatever it is.
-
-### 4.5 Gating visualisation (replicates Engram Sec 6.5 `[REF]`)
-
-Plot mean `α_t` at positions whose suffix n-gram contains a domain term vs. random positions, for
-(a) trained terms, (b) post-hoc written terms, (c) non-matching positions. Paper finds strong α on
-multi-token entities and formulaic phrases, and reports Chinese examples (四大发明, 张仲景) `[REF]`.
-This is **qualitative corroboration only** and is never used as evidence for C1/C2/C3.
-
-### 4.6 Memory-suppression sensitivity (replicates Engram Sec 6.3 `[REF]`)
-
-Evaluate `C` with `memory_enabled=False` at inference (train/inference mismatch, exactly as the
-paper does). Prediction: Tier-D collapses hard (the analogue of factual-knowledge retention dropping
-to 29–44 %), Tier-G degrades less (the analogue of reading-comprehension retaining 81–93 %) `[REF]`.
-This is the **sharpest available test of whether retrieval-with-domain-terms is on the
-"fact-lookup" side of Engram's dichotomy** — and therefore of whether migrating Engram to embeddings
-was a sensible idea at all. A null here (memory contributes equally to general retrieval) would be a
-substantive negative finding about the migration.
-
----
-
-## 5. Fair-comparison protocol
-
-### 5.1 Iso-parameter
-
-Report for **every arm**: trainable params, total params (incl. memory tables), optimiser-state
-bytes, trainable-bytes, checkpoint bytes, and index bytes.
-
-Engram's Sparsity Allocation framing `[REF]` Sec 3.1 fixes `P_tot` and `P_act` and varies how the
-*inactive* budget is split. Encoders have no MoE, so the analogue is:
-
+各表实际素数（E-007）：
 ```
-P_de    = backbone_active_params + memory_slots × d_head   (all counted, nothing is free)
-P_act   = backbone_active_params + 2 · d_mem · d_model      (per-token activated, independent of table size)
+layer1: order2:[1031,1033]  order3:[1039,1049]
+layer3: order2:[1051,1061]  order3:[1063,1069]
 ```
 
-**Rule.** Every headline comparison is made at **matched trainable params (≤ ±2 %)**; if a baseline
-cannot hit the budget, report the bracketing points and interpolate. `A0` (0 trainable) is *not*
-iso-parameter with anything and is reported separately as the zero-shot reference.
+**⚠️ 两个由此暴露的问题**
 
-### 5.2 Iso-compute
+1. **实验配置与生产配置差 250 倍**。`run_abcd.py`/`train_baseline.py` 用
+   `table_size_per_ngram=1024`（67k 参数），`config.py` 默认 `65536`（16.8M）。
+   **E-007 的全部数字都跑在极小表上**，不能代表生产配置的表现。
+   任何跨实验的数字对比必须先确认表容量一致。
 
-As derived in §1.5: `C_DE/C_base = 5P/6P = 0.833` at layer-1 injection on a 4-layer model. Matched by
-`B' = 1.20·B`. Run **both** `matched-batch` (equal negatives) and `matched-FLOPs` (equal compute).
-Report analytic FLOPs *and* measured wall-clock, and flag any arm where they disagree by > 30 %
-(indicates we are kernel-bound, not FLOP-bound — very likely for a 24 M model).
+2. **3-gram 表几乎是纯废槽**。E-007 里 3-gram 共 4 表 ≈ 4,210 槽，
+   对应 9.4×10¹² 的空间——命中率约 0。这部分参数既不提供记忆容量，
+   又在推理时贡献 gather 开销（E-003e 已算：参数:算力比 42:1）。
+   **是否应关闭 3-gram（`max_ngram_size=2`）需做消融**。
 
-### 5.3 Seeds, variance, significance
+**与冷启动的关系（设计层面的根本矛盾）**
 
-- **Seeds:** `{11, 22, 33, 44, 55}` for A0–F; `{11, 22, 33}` for every OAT ablation; `{11}` for
-  the layer sweeps (sweeps are re-run at 3 seeds only for the top-2 points). Budget: document the
-  exact seed list; a seed controls init, data order, negative sampling, and (for baselines) any
-  stochastic adapter init.
-- **Reporting:** `mean ± std` over seeds **and** the 95 % CI from a **paired bootstrap over queries**
-  (10 000 resamples, same resample indices for every arm).
-- **Pairwise system comparison:** per-query `AP@k` → **Wilcoxon signed-rank** (two-sided,
-  α = 0.05) plus **Cliff's δ** as effect size. For Recall@10 use **McNemar's exact test** on the
-  flip table. Report the test *and* the effect size; never report "significant" without δ.
-- **Multiple comparisons:** OAT has 14 arms. Apply **Holm–Bonferroni** across the OAT family and
-  report adjusted p-values. Report the unadjusted p as well.
-- **Pre-registration:** §6's thresholds are fixed *before* the first Tier-D run. Any post-hoc change
-  must be logged in `docs/EXPERIMENTS.md` with a date and a reason, and reported as a change.
+Layer-B 是**纯统计记忆**，学的是「哪些 N-gram 组合出现过」。冷启动要解决的是
+「训练时没见过的术语」——而**新术语的 N-gram 天然落在训练时梯度从未触及的槽上**
+（保持随机初始化）。这正是 H3 类问题的根源，也是 registry（Layer-A）必须存在的
+理由：**它按精确短语寻址，不受哈希空间限制**。
 
-### 5.4 Held constant across every arm
+---
 
-| Held constant | Value |
+## E-008 中文法律冷启动集构建（严格 unseen）`[~ 进行中]`
+
+**目的**：构造能**证伪 P0** 的评测集——训练时严格未见、评测时才出现的术语。
+
+**数据**：`data/real/COLD-1_twang2218_chinese-law-and-regulations`（22,552 行，Apache-2.0）
+
+### E-008a 时间分布实测（已独立复核，非转述）
+
+```
+publish_date 非空 18,385 / 22,552 (81.5%)，NULL 4,167
+范围 1950-01-01 → 2023-07-27
+年份：2018→1735  2019→1630  2020→1945  2021→2165  2022→1806  2023→380
+```
+
+| T0 | TRAIN | COLD | 评价 |
+|---|---|---|---|
+| 2020-01-01 | 12,089 | 6,296 | COLD 偏多 |
+| **2021-01-01** | **14,034** | **4,351** | ✅ **选定** |
+| 2022-01-01 | 16,199 | 2,186 | 偏激进 |
+| 2023-01-01 | 18,005 | **380** | ❌ 不可用 |
+
+### E-008b unseen 保证（严格版）
+
+在 T0=2021 基础上再加一道过滤：要求 COLD 条目的**标题**与**正文前 200 字**
+都未在 TRAIN 中出现：
+```
+TRAIN(content 非空, publish<2021) = 14,034
+COLD (content 非空, publish>=2021) = 4,351
+其中 标题在 TRAIN 未出现            = 2,906 (66.8%)
+其中 再要求 content 前200字未出现   = 2,906  (无额外损失)
+```
+**保证成立**：Layer-A registry 只用 TRAIN 标题播种、Layer-B 只在 TRAIN 上拟合，
+故每个评测术语必然满足「无 registry slot（匹配返回 NULL）+ 零梯度（hash 行停在初始化）」，
+任何 D−C 增益**只能**归因于冷启动写入，无泄漏。
+
+**COLD type 分布**：地方性法规 2,236 / 无效已修改废止 565 / 公司法 38 / 法律 28 /
+中国特色的涉外 24 / 其他 13 —— **非国家法律为主**，与文档叙事不同。
+
+**状态**：✅ **构建完成并验证**（E-008c）
+
+### E-008c 构建输出（实测）
+
+命令：`python build_cold_law.py --out data/real/eval/law`
+
+```
+loaded 22552 rows
+TRAIN (publish < 2021) : 14034
+COLD  (publish >= 2021): 4351
+EVAL  (provably unseen) : 2906  (66.8% of COLD)
+TRAIN clause pool (negatives) : 79786
+-> data/real/eval/law
+  train.jsonl        8000
+  eval_cold.jsonl    1500
+  cold_start.jsonl   1500
+```
+
+**unseen 保证实测复核（关键）**
+```
+cold terms appearing verbatim in train query: 0 / 1500   ← 零泄漏
+cand per eval row: 10    gold == 0 for all rows
+```
+
+**样本**（真实法规，非合成）：
+- term：`医疗废物污染控制管理办法`（COLD 侧新规）
+- query：`医疗废物污染控制管理办法 违反本法规定...医疗废物...排放` ← 标题+首个条款
+- GOLD：该法规正文（2022-12-02 修订）
+- NEG：另一条 TRAIN 侧旧法条款（如固体废物污染罚款处罚办法）—— 同域、旧法、不可答
+
+**设计要点**
+1. 过滤掉「修订/修正案/修改决定/废止」类标题——它们是同一法规的修订日志，
+   术语本身早已存在，会破坏 unseen 语义
+2. 负例全部取自 **TRAIN** 的条款（79,786 条池），确保负例**也不是** unseen，
+   避免「靠区分新旧」作弊
+3. 正则抽取「第X条」条款作为 query 的核心义务从句，正文截断至 800 字符
+4. `gold` 恒为 0（正例固定在 corpus 首位）
+
+**⚠️ 局限**：
+1. 88% 是**地方性法规**，与「国家法律」叙事不同
+2. query 由**标题+条款**模板拼接，非真实用户查询，**仍有自证成分**
+   （比合成数据的 R@1=100 温和，但非零）
+3. 评测 corpus 仅 10 条（1 正 9 负），难度低于真实百万级检索
+
+**下一实验**：E-009 —— 在本集上跑 A/B/C/D，检验冷启动增益（验证 H5）。
+
+### E-008c ⚠️ 发现并修复 bug：eval/term 配对错位 `[已修复 ✅]`
+
+**冒烟测试暴露的现象**
+```
+match rate BEFORE write: 0.0%
+wrote 40/40 terms
+match rate AFTER  write: 0.0%     ← 写入后仍 0%，机制完全没生效
+```
+在 T2 上同样的诊断是 **200/200 = 100%**（E-004），说明是数据构造问题而非模型问题。
+
+**排查过程**
+1. 先怀疑 query 截断 → 改用 title-first + `query_budget=200`，仍 0.1%
+2. 直接打印 canonical id 比对：
+   ```
+   term   : 医疗废物污染控制管理办法
+   query  : 山东医疗废物管理...（开头是"山东"，与 term 完全不同法规）
+   write canonical : [667, 1253, 745, ...]
+   query canonical : [7904, 2218, 2319, ...]
+   contiguous match: False
+   ```
+   **根因**：`build_cold_law.py` 中 `rng.shuffle(eval_rows)` **只打乱了 eval 列表，
+   没有同步打乱 `cold_terms`**，导致两表错位——第 i 条 eval query 配的是第 i 个 term，
+   但它们根本不是同一部法规。
+
+**该 bug 的危害**：会让 E-009 **必然输出 D−C=0**，并被误读为「冷启动无效」。
+E-002 当初就差点得出「写入过度」的假结论；这是同类陷阱的第二次出现。
+
+**修复**：`pairs = list(zip(eval_rows, cold_terms)); rng.shuffle(pairs)` 一起洗牌。
+
+**新增防线**：`build_cold_law.py` 末尾加入 `_verify()`，用真实 tokenizer 校验
+「每个冷启动 term 是否逐字连续出现在其 eval query 中」：
+```
+[verify] cold term present verbatim in its query: 1500/1500 (100.0%)   <-- 必须 ~100%
+```
+并在 query 构造时强制 title 前置 + 预算校验（dropped 1 条）。
+
+**修复后冒烟验证**
+```
+match rate BEFORE write: 0.0%
+wrote 40/40 terms in 0.1s
+match rate AFTER  write: 95.0%     ← 机制生效
+cos(emb_ON, emb_OFF): mean=0.9996  (40条样本饱和，D−C 无法区分，属正常)
+```
+
+**教训**：任何「写入后无增益」的结论，都必须先看 **match rate**。
+match rate = 0 的时候谈 P0 增益是无效的。
+
+---
+
+# 第三部分：待验证假设汇总
+
+| ID | 假设 | 状态 | 验证方式 |
+|---|---|---|---|
+| **H1** | 写入没落地（matcher 不触发） | ❌ 已排除（E-004） | — |
+| **H2** | 门控压制（α≈0） | ❌ 已排除（E-004） | — |
+| **H3** | 注册表列随机不可用 | ❌ 已排除（E-004，原表述有误） | — |
+| **H4** | 写入过度（覆写 backbone） | ❌ 已排除（E-004） | — |
+| **H5** | 写入方向有用但幅度不足以改变排序 | 🔄 **待验证** | 扫 `refine_steps`/`ridge`/注入幅度，看 `D−C` 是否随幅度单调 |
+| **H6** | T2 任务对记忆模块无增益空间 | ⚠️ **待重判** | E-007 起点 loss 0.135 原本判为「任务偏易」，但 E-007c/E-010a 证明真正原因是**硬负例被丢弃 + 数据泄漏**；修正版起点 loss=1.5187（正常）→ 需在干净数据上重判 |
+| **H7** | 需真 backbone 才能测出效果 | ✅ **已证实** | E-001 vs E-004/007：tiny 上一切归零 |
+| **H8** | 实验表容量与生产配置不一致，数字不可外推 | ✅ **已证实** | E-007d：8,396 槽 vs 生产 2,101,122 槽（**250×**） |
+| **H9** | 3-gram 表几乎全废，应关掉 | 🔄 **待消融** | E-007d：4,210 槽 vs 9.4×10¹² 空间；试 `max_ngram_size=2` |
+| **H10** | T2 实验平台存在 train/eval 泄漏 | ✅ **已证实并修复** | E-010b：eval query 泄漏 **100%**；修复后 0.01% |
+| **H11** | E-007 的起点 loss 异常低源于缺陷而非任务性质 | ✅ **已证实** | E-010a：0.135 → **1.5187**（≈ln32/2，InfoNCE 正常起点） |
+
+---
+
+# 附：GB10 迁移执行计划
+
+## 0. 前置：本机已完成、无需重跑的部分
+
+| 成果 | 位置 | 说明 |
+|---|---|---|
+| 环境修复 | scipy 1.18.1 | NumPy 2.x ABI |
+| 真实 backbone | HF cache `models--BAAI--bge-small-zh-v1.5` | 4 层 / 512 维 |
+| 真实数据 | `data/real/` **3.73 GB** | 24 数据集 / ~105 万行 |
+| 干净 T2 数据集 | `data/real/eval/t2_v2` | **零泄漏**，1000 eval + 8000 train |
+| 法律冷启动集 | `data/real/eval/law` | **unseen 零泄漏**，8000 train + 1500 eval + 1500 terms |
+| 诊断脚本 | `diagnose_cold.py` | H1/H2/H3 确诊 |
+| 构建脚本 | `build_real_eval.py` / `build_cold_law.py` | 含泄漏检查 |
+| 实验记录 | `docs/EXPERIMENTS.md` | E-001 ~ E-010b |
+
+**迁移需拷贝**：`de/`、`docs/`、根目录 6 个脚本、`data/real/`。
+**无需重下模型**：`bootstrap_gb10.sh` 已含 HF 下载（或直接拷 HF cache）。
+
+## 1. GPU 前置验证（必须先做，~30 分钟）
+
+GB10 是 sm_121 / aarch64，现有代码**从未在 CUDA 上跑过**（本机 `torch+cpu`）。优先排查：
+
+- [ ] `import torch; torch.cuda.is_available()` → True
+- [ ] `python offline_test.py` → **9/9 PASSED**（关键：验证 `attention_bias` 的 SDPA 分支）
+- [ ] 手工过一遍 `domain_registries.py`：CUDA 下 `registry_table.emb.weight` 的
+      原地写入是否与 DDP 冲突
+- [ ] `torch_dtype=float32` → 试 `bfloat16`（`EngramConfig.torch_dtype`）
+- [ ] **bf16 下重测 `cos(emb_ON, emb_OFF)`**：CPU 上是 0.894，精度变化可能改变该值
+- [ ] 已知：`PhraseMatcher` 在 CPU 上跑（`de/data.py` 注释说明 `num_workers>0` 必需），
+      GPU 环境下会成为瓶颈 —— 用 `--num-workers` 验证
+
+## 2. P0 优先级实验（GB10 上，估时按本机 70 min/epoch 折算 GPU 加速比）
+
+| # | 实验 | 目的 | 本机耗时 | 依赖 |
+|---|---|---|---|---|
+| **E-010** | T2 修正版训练（补全 10 轮 × 2 lr） | 拿到干净数据上可信的 C 组基线 | 中断（2/20 ep） | 步骤 1 |
+| **E-009** | **法律冷启动 A/B/C/D** | 🔴 **首次真正检验 P0** | 未开始 | 步骤 1 |
+| **E-011** | 表容量消融 `{1024, 8192, 65536}` | 验证 H8，定生产配置 | ~3× E-010 | E-010 |
+| **E-012** | `max_ngram_size` ∈ `{2,3}` | 验证 H9（3-gram 是否废槽） | ~2× E-010 | E-011 |
+| **E-013** | `layer_ids` ∈ `{[1,2],[1,3]}` | 验证 P1 待修项 | ~2× E-010 | E-010 |
+| **E-015** | `temperature` ∈ `{0.02,0.05}` | loss 起点 1.52 偏高，可能是温度过低 | ~2× E-010 | E-010 |
+
+**E-009 是整个项目的核心**：只有它能回答「冷启动写入到底有没有用」。
+在它出结果前，其余实验都是次要的。
+
+## 3. 生产配置验证（消融完成后）
+
+- [ ] 用**生产默认配置**（`config.py`，表 65536、81.5M 可训练）跑一次，
+      确认实验结论在真实容量下成立
+- [ ] 测吞吐与显存，回填 `docs/COMPUTE.md`（当前全为推导估算）
+
+## 4. 部署约束（用户明确要求纳入考虑）
+
+vLLM 非硬需求，但以下必须在决策前明确：
+
+- [ ] **`PhraseMatcher` 优化**：当前 Python 逐序列 + `range(L)` numpy 循环，
+      是热路径瓶颈。`num_workers` 只是缓解，需重写为向量化/GPU 版
+- [ ] **Registry 快照机制**：`PhraseRegistry.version` 已有版本门控
+      （`maybe_rebuild`），需扩展为「不可变快照 + 原子 reload」
+- [ ] **新增术语后的重嵌入决策**（TODO 中从未提及的产品级问题）：
+      索引离线建立，冷启动只改 query 侧向量 → query/doc 空间可能失配
+
+## 5. 执行顺序原则
+
+> **先把便宜的证伪跑掉。** E-009 若证伪 P0，整个方案需要重新设计，
+> 此时 E-011/012/013 的消融都没有意义。所以：**步骤 1 → E-009 → 其余**。
+
+---
+
+# 附：本文档引用的脚本
+
+| 脚本 | 用途 |
 |---|---|
-| Training triplets (content **and order**) | identical file, identical seeded sampler |
-| Tokens seen / optimiser steps | identical |
-| Batch size | identical in `matched-batch` arms (§1.5) |
-| LR schedule *shape* | identical (linear warmup 10 % → cosine) |
-| Temperature, symmetric InfoNCE, hard-negative policy | identical |
-| `max_len` | 128 train / 512 eval |
-| Pooling, L2 normalisation | identical |
-| Eval suite, candidate sampling (100 k), tie handling | identical |
-| Seed list | identical |
-| Hash seed / table primes / registry free-list policy | identical |
-
-**Deliberately *not* held constant:** the learning-rate *value* and LoRA rank / table size. Each
-method gets the same **tuning budget** — a grid of ≤ 12 configurations, 1 seed, on a held-out
-`dev` split carved out of the *training* triplets (never from the eval sets) — and the tuned config
-is then re-run with the full seed list. The entire tuning log is published.
-
-### 5.5 Leakage and contamination controls
-
-1. **Term-level holdout.** Cold-start terms must have **zero** exact canonical-token-n-gram overlap
-   with the training corpus (checked with a suffix-array / Aho–Corasick scan over the compressed ids,
-   orders 2–4). Near-duplicate documents are removed by MinHash-Jaccard ≥ 0.8.
-2. **Document-level holdout.** The documents containing cold-start terms are excluded from training.
-3. **Query leak check.** No cold-start term may appear in any query used for the Tier-D/Tier-G
-   numbers — those are separate reports.
-4. **Registry leak check.** The registry is asserted empty at the start of every run except where the
-   arm explicitly populates it.
-5. **Pre-training-data check.** We do **not** claim a term is "unseen by the model"; we claim it is
-   unseen *by our training corpus*. The paper must say the weaker thing.
-
----
-
-## 6. Success criteria / decision gates (pre-registered)
-
-Primary metric: **Tier-D nDCG@10** (mean over the 5 domain C-MTEB tasks).
-Guards: **Tier-G nDCG@10**, **Tier-S STS mean Spearman**, **Tier-CS nDCG@10**.
-All deltas are **absolute points** (not relative %), because at a 61.77 baseline, 1 % relative
-(0.62 pt) is below seed noise.
-
-### 6.1 Continuation thresholds (C1/C2)
-
-| Outcome (5 seeds, paired bootstrap 95 % CI excludes 0, Wilcoxon p < 0.05) | Decision |
-|---|---|
-| `C − A0 ≥ +3.0` on Tier-D **and** all 5 seeds positive | **GO.** Invest in the full matrix. |
-| `+1.5 ≤ C − A0 < +3.0` | **CONDITIONAL.** Continue only if additionally `C ≥ A1` and `C ≥ best matched baseline`, and `D > C` on Tier-CS. |
-| `C − A0 < +1.5` | **STOP.** No defensible "domain adaptation" claim. |
-
-*Why +3.0 and not +1?* `[REF]` From the published C-MTEB table, going from `bge-small-zh` to
-`bge-base-zh` (24 M → 102 M, 4× params) buys **+5.4** on EcomRetrieval, **+6.7** on
-MedicalRetrieval, **+6.6** on CmedqaRetrieval. So a +3.0 absolute domain gain from a **frozen** 24 M
-backbone with ~6 M extra trainable params is roughly "half of what quadrupling the model buys". That
-is the bar we pre-commit to. +1.5 is reported as a null-to-weak result, not a win.
-
-### 6.2 Specificity check (does the gain come from *domain* memory?)
-
-`ratio = (C − A0)_domain / (C − A0)_general`.
-
-* `ratio ≥ 2.0` → the gain is domain-specific: supports C1.
-* `0.5 ≤ ratio < 2.0` → the module helps equally everywhere: it is a generic quality booster, not a
-  domain memory. **Reframe** the paper as "a cheap generic contrastive adapter" and drop the domain
-  claim. (This is still a publishable result; it is just a different one.)
-* `ratio < 0.5` → the module is doing something *other* than domain adaptation. Investigate or stop.
-
-### 6.3 Forgetting guard (hard stop)
-
-| Guard | Threshold | Action |
-|---|---|---|
-| Tier-G nDCG@10 drop vs `A0` | **> −1.0 pt** | **STOP** the whole line; report the collapse. |
-| Tier-S STS mean Spearman drop | **> −1.5** | **STOP.** |
-| C-MTEB Overall Avg drop | **> −2.0** | **STOP.** |
-
-*Note this is tighter than PLAN.md §5's "≤ 1 %"*, which at a 61.77 baseline is 0.62 pt — smaller than
-typical seed-to-seed std on a 4-layer model. We tighten to absolute 1.0 pt and say so.
-
-### 6.4 The dynamic-update gate (C3) — the headline
-
-| Outcome on Tier-CS | Decision |
-|---|---|
-| `D − C ≥ +5.0`, p < 0.05, **and** write p50 < 50 ms/term, p99 < 500 ms, **and** zero parameter updates outside the written rows | **GO — headline claim supported.** |
-| `+1.0 ≤ D − C < +5.0` | **WEAK.** Report honestly as "some benefit"; do not lead with it. |
-| `D − C < +1.0` | **CRUD REGISTRY IS DEAD.** Strip Layer-A; publish C only. |
-| `D ≤ C` | **Falsifier `F1`.** The entire thesis fails. Report the negative result. |
-
-Additional dynamic sub-gates:
-
-* **Oracle comparison:** if `F` (retrained with the terms) `≤ D + 1.0`, the write path is *strictly*
-  better than retraining → strongest version of the claim. If `F ≥ D + 3.0`, state plainly that
-  retraining would have been better.
-* **Realistic-write gate:** the write must work when the operator supplies **only the term string**
-  (no context corpus). If the oracle-context regime works but the term-only regime does not, the
-  product claim ("运营插一条新术语") fails. Report both regimes, never just the flattering one.
-* **Scaling gate:** the write path must hold for **≥ 2 000** successive terms without degradation.
-  MEMIT collapses after ~250 sequential edits `[REF]` `arXiv:2503.05683`; that is the bar we must
-  clear and we must run the same sequential-sweep test on ourselves.
-
-### 6.5 Delete / poison safety (group G)
-
-Recover to **≥ 98 %** of the pre-poison score after deleting the poisoned entries, with no other
-metric moving by more than 0.2 pt. Below 96 % → the "the gate makes CRUD safe" claim is **falsified**
-and must be withdrawn, regardless of C1/C3 results.
-
-### 6.6 Falsifiers (pre-committed negatives)
-
-| ID | Falsifier | Consequence |
-|---|---|---|
-| **F1** | `D ≤ C` on Tier-CS | thesis fails; publish negative result |
-| **F2** | Cold-start gain requires the oracle context corpus (term-only write fails) | product claim fails; method becomes "write-a-term-with-contexts" |
-| **F3** | `CPT-matched` or best `LoRA@6.19 M` ≥ `C` | memory is not the mechanism; stop |
-| **F4** | OAT-2 (`α≡1`) within 0.3 pt of `C` | gating claim does not transfer to bi-encoders |
-| **F5** | `G` recovers < 96 % of pre-poison score | CRUD safety claim is false |
-| **F6** | `A1` (matched-capacity MLP head, no memory) ≈ `C` | gain is capacity, not memory |
-| **F7** | nDCG vs memory slots is flat above 4 M slots | "scalable memory axis" unverified at our scale |
-| **F8** | Memory-suppression sensitivity (§4.6) does not separate domain from general | Engram→embedding migration is unjustified; re-evaluate the whole premise |
-
-### 6.7 The overall decision rule
-
-> **We claim anything only if `C1 ∧ C3 ∧ C4(falsifier-clean)`, i.e. `C > A0` by the §6.1 threshold,
-> `D > C` by the §6.4 threshold, and none of F1–F8 have fired.** Otherwise we publish the null
-> result with the full matrix, including the ablations that *did* work.
-
----
-
-## 7. Cold-start protocol (`Tier-CS`) — specification
-
-This is the experiment the whole project is sold on, so it gets its own rigorous protocol.
-
-1. **Term universe.** From the e-commerce domain corpus, take every canonical-token n-gram
-   (orders 2–4) that occurs ≥ 20 times and that is *not* an exact match for any training-corpus
-   n-gram. Rank by corpus TF-IDF; sample **2 000** terms with a stratified sample over frequency
-   (head / mid / tail buckets of 700 / 700 / 600).
-2. **Documents.** For each term, take up to 10 held-out documents containing it as the positives;
-   the corpus of these + 100 000 distractors is the CS corpus. Queries are natural sentences from
-   those documents that contain the term.
-3. **Two write regimes, always both:**
-   * **R1 (oracle context):** the operator supplies the term *and* up to 8 sentences containing it.
-   * **R2 (term-only):** the operator supplies only the term string. `solve_slot_closed_form` then
-     runs with a single, term-only context; if that is degenerate we fall back to mean-initialising
-     the row from the frozen backbone's own representation of the term and say so.
-4. **Three write methods, all reported:** (a) closed-form ridge solve, 0 gradient steps;
-   (b) + 20 single-row refine steps; (c) + 200 single-row refine steps. Report all three — (b) and
-   (c) are still "no retraining of the model", but they *are* gradient steps and must not be hidden.
-5. **Controls on the same split:** `C` (no write), `C` + random-row write (same number of rows, random
-   vectors — must give ≈ 0 or negative), `C` + write without the gate (`W_V` path forced, α≡1),
-   `F` (oracle retrained with those documents).
-6. **Metrics:** Tier-CS nDCG@10 / Recall@10; α at written-term positions; write latency
-   (p50/p95/p99); matcher rebuild latency as a function of registry size (10 k / 50 k / 200 k terms);
-   effect on Tier-G (localisation check — a write must not move general retrieval by > 0.5 pt).
-7. **Sequential-sweep stress test** (`arXiv:2503.05683` protocol): apply writes one at a time for
-   2 000 steps, measuring Tier-CS every 100 writes, to detect our own collapse point.
-
----
-
-## 8. Run ordering for a single GB10
-
-`[EST]` timings assume the Phase-0 calibration and are **ordered by value-per-hour, not by
-cheapness**. The two cheapest experiments are the two most decisive ones.
-
-| # | Run | What it decides | `[EST]` wall-clock | Value/ Hour |
-|---|---|---|---|---|
-| **P0.1** | **Platform probe**: `torch.cuda.is_available()`, sm_121 support, a 100-step bf16 matmul benchmark, peak memory, aarch64 wheel audit for `peft`/`transformers`/`mteb` | Whether *anything* is possible | **0.5 h** | gate |
-| **P0.2** | **Eval-harness repair** (see §9) + **reproduce `A0` = 61.77 ± 0.5 on C-MTEB Retrieval** | Whether our measurements mean anything | **3–4 h** | gate |
-| **P0.3** | **Null-inertness tests** (OAT-10, B3 = A0 to fp noise; registry-empty path bit-identical) | Whether the module leaks into A | **0.5 h** | gate |
-| **P1** | **KILL-SHOT #1 — can it overfit?** Train `C` on **200** triplets for 300 steps. Pass = train loss collapses and Tier-0 nDCG moves. | Is the implementation even wired up? Fails ~30 % of the time. | **10 min** | ★★★★★ |
-| **P2** | **KILL-SHOT #2 — A0 vs C on Tier-0 + 500-query Tier-D, 2 seeds.** | **Can the entire idea die here, in 30 min?** | **30 min** | ★★★★★ |
-| **P3** | `A1` (matched-capacity MLP head) vs `C`, 2 seeds | Is it memory or capacity? (`F6`) | **40 min** | ★★★★★ |
-| **P4** | `B1`, `B2`, `B3`, 3 seeds | Control-group completeness; `F4` | **1.5 h** | ★★★★ |
-| **P5** | Full **A0/A1/B1/B2/B3/C, 5 seeds**, Tier-D + Tier-G + Tier-S | The main table | **6–8 h** | ★★★★★ |
-| **P6** | **`Tier-CS` cold-start**, all regimes and write methods | **The headline claim + `F1`/`F2`** | **2–3 h** | ★★★★★ |
-| **P7** | **`LoRA` rank grid** (7 ranks × 3 subsets) and **`CPT-matched`** on the same data | **`F3` — the fairest competitor** | **4–6 h** | ★★★★ |
-| **P8** | **V-EXP** vocabulary-extension arm (K ∈ {1 k, 4 k, 16 k}) | The closest competitor (§3.2) | **3–4 h** | ★★★★ |
-| **P9** | **Injection-layer sweeps** S-sweep-1/2 (4 + 4 runs, 1 seed) | Layer placement on 4 layers | **2 h** | ★★★ |
-| **P10** | **OAT grid** (14 variants × 3 seeds) | Component attribution; `F4`, paper-order test | **8–12 h** | ★★★ |
-| **P11** | **Capacity sweep** XS→S→L→XL | `F7` | **3 h** | ★★★ |
-| **P12** | Memory-suppression sensitivity (§4.6) + gating visualisation (§4.5) | `F8`; qualitative figure | **1 h** | ★★★ |
-| **P13** | Poison/delete test (group G) + 2 000-term sequential sweep | `F5` | **1.5 h** | ★★★ |
-| **P14** | Tier-X full C-MTEB on the 3 surviving arms only | Final table | **12 h** | ★★ |
-| **P15** | **Tier-B scale-up** on `bge-base-zh-v1.5` (12 layers): B-sweep-1 (12 runs), B-sweep-2, then C/D | The only place the "layer 2" claim is meaningful | **12–20 h** | ★★★ |
-| **P16** | Learned post-hoc write (a small MLP that predicts the slot row from the term string, trained on written terms) | Turns R2 from a heuristic into a method | **4 h** | ★★ |
-| **P17** | `CPT-full`, `V-EXP` at matched FLOPs, OverEncoding-style input-embedding injection | Completes the baseline table | **8 h** | ★★ |
-
-**Total to a defensible paper: ≈ 70 h.** The path from "cannot work" to "does it work at all"
-(P0 → P2) is **≈ 5 hours**. Everything past P5 is optional until P2 passes.
-
-**Ordering rationale.** P1 and P2 come first because they are the only runs that can *stop* the
-project, and stopping early is worth more than any number of confirmatory runs. P3 (`A1`) is placed
-immediately after because it is the single cheapest control that separates "memory" from "capacity",
-and a project that cannot separate those two is dead on arrival. P7 (`LoRA`/`CPT`) is deliberately
-late: it is expensive, and if P2/P3 fail there is no point. P15 (12-layer) is last because a 4-layer
-result cannot be extrapolated, but also cannot be published as-is.
-
----
-
-## 9. Known measurement hazards in the current repository (must be fixed in Phase 0)
-
-Found by reading `de/evaluation.py`, `de/model.py`, `de/train.py`, `de/registry.py`,
-`de/cold_start.py`. **These are not style nits — several of them would silently manufacture the
-result we want.** Each is a P0.2 blocker.
-
-| # | Location | Problem | Consequence | Fix |
-|---|---|---|---|---|
-| **H1** | `evaluation.py::retrieval_metrics_from_scores` | `idcg` is computed as `1/log2(arange(n_queries)+2)` — the **query count**, not `k=10`. The function is named `ndcg@10` but is not nDCG@10. | All headline numbers are wrong by a large, query-count-dependent factor. | Implement standard nDCG@k with `idcg` over `min(k, n_cand)`. |
-| **H2** | `evaluation.py::evaluate_retrieval` | Builds the full `Q @ C.T` matrix and then samples `nq` random distractors per query with `torch.randperm(C.shape[0])` — **not** C-MTEB's 100 k candidate protocol, and it never removes the *other* gold documents (false negatives). | Results are not comparable to any published number; Recall@10 is understated. | Use `mteb` + `mteb.Dev` style corpora and C-MTEB's documented 100 k-candidate sampling. |
-| **H3** | `evaluation.py::evaluate_retrieval` | `model.memory_enabled = suppress_memory and bool(model.layer_ids)` — the parameter is named `suppress_memory` but is assigned to `memory_enabled`. Passing `suppress_memory=True` **enables** memory. | The Engram §6.3 sensitivity experiment can be run backwards by accident. | Rename to `memory_enabled`, invert nothing, add a unit test. |
-| **H4** | `evaluation.py` tie handling | Ranks use strict `>`; a model that emits duplicate embeddings (common when memory is disabled and pooling degenerates) gets optimistic ranks. | Inflates A0 and inflates tie-prone baselines. | Tie-aware rank: `ranks = (sim > pos).sum() + ((sim == pos).sum() - 1)/2`, floored. |
-| **H5** | `model.py::_canonical_ids`, `hashing.py` | `nn.Embedding` tables use **dense** gradients. At the XL budget the tables hold 33.55 M elements; dense grad + param + Adam state at 12–16 B/element is **0.40–0.54 GB**, touched every step. | Will not scale past the L budget; also far slower than sparse updates on long-tail tables. | `sparse=True` (or a fused dense-Adam) for the hashed tables; keep the registry table dense (it is small and gets sparse updates anyway). |
-| **H6** | `train.py::build_param_groups` | `value_proj` / `key_projs` have `bias=False`, so they fail the `".conv." / "norm_" / "gate_bias" / ".bias"` filters and land in the **memory** group → they get **Adam with lr × 5 and wd = 0**, which is not what Engram Sec 4.1 prescribes (Adam ×5 is for the *tables*). | Silent deviation from the paper's optimiser recipe; confounds OAT-14. | Classify by explicit parameter name/owner, not string matching. |
-| **H7** | `cold_start.py::solve_slot_closed_form` | `target = h_plain[0, end]` is computed with the backbone run **with memory suppressed**, i.e. `target == h_pre` up to layers above the injection layer. Then `delta = target - h_pre`, which is **non-zero only because of layers ≥ layer_id**. The docstring's intent ("what the backbone *should* think at this position") is not what the code computes. | The closed-form write solves for a correction that partly cancels the model's own computation above the injection layer. Either useless or actively harmful. | Fix, or replace with a closed-form that targets an *external* target (e.g. the mean representation of the term over contexts, projected). Must be re-derived before P6. **This is the single most likely source of a spurious null on the headline claim.** |
-| **H8** | `cold_start.py::refine_slot` | `opt = Adam([w])` over the **entire** registry embedding matrix, then `w.requires_grad_(True)` — it optimises all rows' gradients (which are dense) and applies weight-decay-free updates to every row, not just the new one. | Not a "single-row fine-tune" as claimed; risks erasing all previously written terms. | Optimise a 1-row parameter view, or use `sparse=True`. |
-| **H9** | `registry.py::PhraseMatcher._rebuild` | Any registry mutation bumps `version`; the next `match()` pays an **O(\|active phrases\|)** rebuild (hashing + sort for every length class). With 50 k phrases this is not O(1). | The "millisecond write" claim is false at scale; must be measured and reported (§6.4 latency gates include the rebuild). | Measure and report the true write→first-query latency; optionally ship an incremental index update. |
-| **H10** | `model.py::forward` | `use_memory` depends on `self.memory_enabled and bool(self.layer_ids)`; `OAT-10` ("compute `y`, discard it") has no switch. | The identity assertion (must equal A0 to fp noise) cannot be run. | Add an explicit `inject: bool` switch. |
-| **H11** | `model.py::prepare_registry_slots` / `encode` | The matcher runs on CPU numpy **per batch**; `match()` does an inner Python loop over candidate positions. | Likely the dominant training cost, and it scales with sequence length, not model size. | Profile in P0; if it dominates, this is the real bottleneck to report, not FLOPs. |
-| **H12** | `losses.py::info_nce_with_hard_negatives` | Hard negatives are **only** used in the query→doc direction; the doc→query direction is dropped. Asymmetric. | Any baseline using symmetric loss is not comparable. | Either make DE symmetric or make all arms asymmetric — pick one and hold it fixed (§5.4). |
-| **H13** | `train.py::main` | No seed argument is threaded anywhere; `torch`/`numpy` are unseeded. | **All seed-variance requirements (§5.3) are currently unimplementable.** | Add `--seed` and seed `torch`, `numpy`, `random`, plus the DataLoader generator. |
-
-**P0.2 acceptance criteria (all must pass):** H1–H4, H7, H10, H13 fixed and unit-tested;
-`A0` reproduces 61.77 ± 0.5 on C-MTEB Retrieval; `OAT-10` ≡ `A0` to fp32 noise (max abs diff < 1e-5).
-
----
-
-## 10. Run manifest (every experiment gets an id)
-
-```
-P0.1  platform-probe              P0.2  eval-harness-v2            P0.3  null-inertness
-P1    overfit-200                 P2    A-vs-C-killshot             P3    A1-capacity-control
-P4    B1/B2/B3                    P5    main-table-5seed            P6    cold-start
-P7    lora-grid / cpt-matched     P8    vexp-vocab-extension        P9    layer-sweep-S
-P10   oat-01..oat-14              P11   capacity-sweep              P12   sensitivity+gating-viz
-P13   poison-delete / seq-2000    P14   tier-X-full                 P15   tier-B-scaleup
-P16   learned-write               P17   cpt-full / overencoding
-```
-
-Each run emits: `config.json`, `resolved_config.json` (after defaults), `metrics.json`,
-`metrics_per_query.parquet`, `timing.json`, `env.txt`, `git_rev.txt`, and the trained checkpoint.
-
----
-
-## 11. Verified references
-
-**Primary**
-- Cheng et al., *Conditional Memory via Scalable Lookup: A New Axis of Sparsity for Large Language
-  Models* (Engram), **`arXiv:2601.07372v1`**, CC BY 4.0; ACL 2026 long paper
-  (`aclanthology.org/2026.acl-long.226.pdf`); code `github.com/deepseek-ai/Engram` (Apache-2.0).
-  All numbers quoted in §1.3, §4.2, §4.4, §4.6 were read from the v1 HTML, Sec 4.1 / 6.2 / 6.3 / 6.5.
-- Herold, Kozielski, Santavas, Versley, Khadivi (eBay), *Vocabulary Customization for Efficient
-  Domain-Specific LLM Deployment*, **`arXiv:2509.26124v1`**, NEURIPS 2025 CCFM Workshop.
-- Nakash, Calderon, Ben-David, Hoffer, Reichart, *AdaptiVocab*, **`arXiv:2503.19693`**.
-- Xiao et al., *C-Pack: Packed Resources For Advance General Chinese Embeddings*, **`arXiv:2309.07597`**;
-  C-MTEB task/size table & leaderboard via `C-MTEB` PyPI 1.1.1 (released 2024-04-17).
-- Muennighoff et al., *MTEB*, **`arXiv:2210.07316`**; Enevoldsen et al., *MMTEB*, **`arXiv:2502.13595`**.
-- Xie et al., *Qwen3 Embedding*, **`arXiv:2506.05176`** / model card `Qwen/Qwen3-Embedding-0.6B`
-  (source of the C-MTEB comparison table used in §3.1).
-- Jiang et al., *Benchmarking and Enabling Efficient Chinese Medical Retrieval via Asymmetric
-  Encoders* (CMedTEB / CARE), **`arXiv:2604.10937`**, ACL 2026; repo `github.com/PhilipGAQ/CARE`.
-- *Understanding the Limits of Lifelong Knowledge Editing in LLMs*, **`arXiv:2503.05683`**.
-- *Teaching Old Tokenizers New Words: Efficient Tokenizer Adaptation for Pre-trained Models*,
-  **`arXiv:2512.03989`**.
-- *Scaling Embedding Layers in Language Models* (SCONE), **`arXiv:2502.01637`**;
-  repo `github.com/llmsresearch/scone`.
-- Huang et al., *Over-Tokenized Transformer: Vocabulary is Generally Worth Expanding* (OverEncoding),
-  ICML 2025, PMLR **v267**, paper key `huang25bb`.
-- NVIDIA, *DGX Spark* (GB10) product page + DGX Spark User Guide: 128 GB unified LPDDR5x,
-  273 GB/s, up to 1 PFLOP FP4 (sparse), 20-core Arm, sm_121.
-
-**Model / dataset identifiers used above (all verified by web search, none invented)**
-`BAAI/bge-small-zh-v1.5` · `BAAI/bge-base-zh-v1.5` · `BAAI/bge-large-zh-v1.5` ·
-`BAAI/bge-m3` · `intfloat/multilingual-e5-small` · `Qwen/Qwen3-Embedding-{0.6B,4B,8B}` ·
-`gte-Qwen2-1.5B-instruct` · `gte-Qwen2-7B-instruct` ·
-C-MTEB `T2Retrieval` `MMarcoRetrieval` `DuRetrieval` `CovidRetrieval` `CmedqaRetrieval`
-`EcomRetrieval` `MedicalRetrieval` `VideoRetrieval` `T2Reranking` `CMedQAv1` `CMedQAv2` `Ocnli`
-`Cmnli` `CLSClusteringS2S/P2P` `ThuNewsClusteringS2S/P2P` `ATEC` `BQ` `LCQMC` `PAWSX` `STSB`
-`AFQMC` `QBQTC` `TNews` `IFlyTek` `Waimai` `OnlineShopping` `MultilingualSentiment` `JDReview`
-(Hub: `C-MTEB/<name>`).
-
-**Explicitly UNVERIFIED (do not cite until checked)**
-- `ritrieve_zh_v1` (0.3 B, C-MTEB 72.71 / retrieval 76.97) — appears in Qwen3's comparison table;
-  HF id unknown.
-- `KaLM-Embedding-Gemma3-12B-2511`, `Nemotron-3-Embed-8B-BF16`, `Octen-Embedding-{4B,0.6B}`,
-  `jina-embeddings-v5-text-nano`, `harrier-oss-v1-*` — seen in a live MTEB leaderboard homepage
-  snapshot; ids, sizes and C-MTEB ranks not confirmed.
-- Current ranking on `mteb-leaderboard.hf.space` for `MTEB(cmn, v1)` — dynamic; snapshot with a date.
-- arXiv ids for OverEncoding, SuperBPE, ROME, MEMIT, AlphaEdit, WISE, REALM, RETRO, PlugLM,
-  Memory+ (names and venues are confirmed; numeric ids are not).
-- Per-task C-MTEB numbers for any `*-v1.5` BGE checkpoint (only aggregates are published).
-- Actual GB10 throughput, `peft`/`bitsandbytes` aarch64 wheel availability, and stable sm_121
-  PyTorch packaging — must be measured in P0.1.
-
----
-
-## 12. Open questions for the parent session
-
-1. **Domain choice.** §1 assumes **e-commerce** as the primary domain (best public zh retrieval
-   resources: `EcomRetrieval`, plus AdaptiVocab/Herold et al. as the closest comparator, plus
-   `Herold et al. 2025 acl-industry.74` as the CPT reference). PLAN.md §3.3 suggests e-commerce **or**
-   medical. Medical would let us use **CMedTEB** (`arXiv:2604.10937`) as an independent judge but
-   makes the vocabulary-expansion comparison less direct. *Recommendation: e-commerce primary,
-   CMedTEB as a second, out-of-scope-of-tuning domain for generalisation.*
-2. **Training corpus.** PLAN.md §3.1 lists PubMed/FinQA/CaseHOLD/Amazon Reviews. For a **retrieval**
-   experiment we need `(query, positive, hard-negative)` triples, and none of those are retrieval
-   datasets. `EcomRetrieval` (1000 q) is too small to train on; the natural sources are
-   T2Ranking (train split) and DuReader. **This data-engineering step is on the critical path and is
-   not yet scoped anywhere.** It is the biggest under-planned item in PLAN.md.
-3. **Tier-B timing.** §8 P15 (12-layer `bge-base-zh-v1.5`, 12+ run sweep) is the only place the
-   "layer 2" claim is meaningful, at an estimated 12–20 h. Worth it only if P5 shows a real domain
-   effect *and* the effect survives the P7 baselines.
+| `build_real_eval.py` | C-MTEB → 项目 JSONL 契约（HTML 清洗 + BM25 硬负例 + gold 校验） |
+| `build_cold_law.py` | 法律冷启动集（T0 切分 + 严格 unseen 过滤） |
+| `train_baseline.py` | 真实数据训练基线，**以 loss 曲线为主要输出**，含 lr 扫描与不对称长度 |
+| `diagnose_cold.py` | H1/H2/H3 诊断 + 参数漂移 + cos(ON,OFF) 方向检测 |
+| `run_abcd.py` | 四组对照实验 |
+| `offline_test.py` | 9 项离线机制检查 |

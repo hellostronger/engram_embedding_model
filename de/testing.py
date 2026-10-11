@@ -58,11 +58,17 @@ def build_char_tokenizer(texts: Sequence[str], tmpdir: str = None):
 # --------------------------------------------------------------------------- #
 @torch.no_grad()
 def encode_texts(model, tokenizer, texts: List[str], max_len: int = 64,
-                   batch_size: int = 64, device=None) -> torch.Tensor:
-    """Encode a list of strings into L2-normalised embeddings."""
+                   batch_size: int = 64, device=None,
+                   return_gate: bool = False):
+    """Encode a list of strings into L2-normalised embeddings.
+
+    With ``return_gate=True`` also returns the per-layer context-gate tensors
+    keyed by injection layer id (values concatenated over batches).
+    """
     device = device or model.device
     model.eval()
     outs = []
+    all_gates: dict = {}
     for i in range(0, len(texts), batch_size):
         chunk = texts[i: i + batch_size]
         enc = tokenizer(
@@ -72,9 +78,18 @@ def encode_texts(model, tokenizer, texts: List[str], max_len: int = 64,
         ids = enc["input_ids"].to(device)
         mask = enc["attention_mask"].to(device)
         slots = model.prepare_registry_slots(ids.tolist()).to(device)
-        emb = model(ids, mask, slots)
+        if return_gate:
+            emb, gates = model(ids, mask, slots, return_gate=True)
+            for lid, g in gates.items():
+                all_gates.setdefault(lid, []).append(g.float().cpu())
+        else:
+            emb = model(ids, mask, slots)
         outs.append(emb.float().cpu())
-    return torch.cat(outs, dim=0)
+    emb = torch.cat(outs, dim=0)
+    if return_gate:
+        merged = {lid: torch.cat(gs, dim=0) for lid, gs in all_gates.items()}
+        return emb, merged
+    return emb
 
 
 def load_rows(path: str) -> List[dict]:
